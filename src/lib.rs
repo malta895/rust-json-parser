@@ -108,6 +108,9 @@ impl<R: BufRead> JSONParser<R> {
                     is_inside_object = false;
                     is_json_ended = true;
                 }
+                Token::GenericChar('\n') =>{
+                    //ignore
+                }
                 Token::GenericChar(_) => return Err(p.build_json_err(
                     format!("Unexpected {}", token)
                 )),
@@ -216,5 +219,11 @@ mod check_valid_tests {
     fn should_report_unexpected_eof_for_empty_file() {
         let found_err = JSONParser::check_valid("".as_bytes()).unwrap_err();
         assert_eq!("Unexpected EOF: at line 1", found_err.to_string())
+    }
+
+    #[test]
+    fn should_not_report_error_for_new_line_at_the_end_of_file() {
+        let res = JSONParser::check_valid("{}\n".as_bytes());
+        assert_eq!(Ok(()), res)
     }
 }
