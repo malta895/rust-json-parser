@@ -6,7 +6,7 @@ pub enum Token {
     ClosedBrace,
     NewLine,
     DoubleQuotes,
-    // Column,
+    Column,
     GenericChar(char),
 }
 
@@ -24,6 +24,7 @@ impl fmt::Display for Token {
             Token::ClosedBrace => String::from(CLOSED_BRACE),
             Token::NewLine => String::from(NEW_LINE),
             Token::DoubleQuotes => String::from(DOUBLE_QUOTES),
+            Token::Column => String::from(COLUMN),
             Token::GenericChar(c) => format!("{}", c),
         };
         write!(f, "'{}'", token_str)
