@@ -5,7 +5,11 @@ use super::{error::JSONError, token::Token};
 #[derive(PartialEq, Clone)]
 enum State {
     Normal,
-    StringLiteral,
+
+    AwaitingValue,
+    ValueNumber,
+
+    ValueStringLiteral,
     Escaping,
 }
 
@@ -30,36 +34,42 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         ('}', State::Normal) => {
                             tokens.push(Token::ClosedBrace);
                         }
+                        ('}', State::ValueNumber) => {
+                            tokens.push(Token::Number);
+                            tokens.push(Token::ClosedBrace);
+                        }
                         ('\n', State::Normal) => {
                             tokens.push(Token::NewLine);
                         }
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
+                            state = State::AwaitingValue;
                         }
                         (',', State::Normal) => {
                             tokens.push(Token::Comma);
                         }
-                        (' ', State::Normal) => {
+                        (' ', State::Normal | State::AwaitingValue) => {
                             // ignore space
                         }
-                        ('"', State::Escaping) | ('\\', State::Escaping) => {
+                        ('1'..='9', State::AwaitingValue | State::ValueNumber) => state = State::ValueNumber,
+                        ('"' | '\\', State::Escaping) => {
                             curr_string_literal.push(c);
-                            state = State::StringLiteral;
+                            state = State::ValueStringLiteral;
                         }
-                        ('\\', State::StringLiteral) => {
+                        ('\\', State::ValueStringLiteral) => {
                             state = State::Escaping;
                         }
-                        ('"', _) => {
-                            if state == State::Normal {
-                                state = State::StringLiteral;
-                            } else {
-                                tokens.push(Token::StringLiteral(curr_string_literal.clone()));
-                                curr_string_literal.clear();
-                                state = State::Normal;
-                            }
+                        ('"', State::Normal | State::AwaitingValue) => {
+                            state = State::ValueStringLiteral;
                             tokens.push(Token::DoubleQuotes);
                         }
-                        (_, State::StringLiteral) => curr_string_literal.push(c),
+                        ('"', State::ValueStringLiteral) => {
+                            tokens.push(Token::StringLiteral(curr_string_literal.clone()));
+                            curr_string_literal.clear();
+                            state = State::Normal;
+                            tokens.push(Token::DoubleQuotes);
+                        }
+                        (_, State::ValueStringLiteral) => curr_string_literal.push(c),
                         (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
                     }
                 }
@@ -268,6 +278,22 @@ mod lexer_tests {
                 Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
                 Token::DoubleQuotes,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_a_number() {
+        run_test_case_with(
+            "{ \"key\": 123456789}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
                 Token::ClosedBrace,
             ]),
         )

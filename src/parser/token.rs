@@ -9,6 +9,7 @@ pub enum Token {
     Column,
     Comma,
     StringLiteral(String),
+    Number
 }
 
 const OPEN_BRACE: &str= "{";
@@ -28,6 +29,7 @@ impl fmt::Display for Token {
             Token::DoubleQuotes => String::from(DOUBLE_QUOTES),
             Token::Column => String::from(COLUMN),
             Token::Comma => String::from(COMMA),
+            Token::Number => String::from("<number>"),
             Token::StringLiteral(_) => String::from("<string literal>"),
         };
         write!(f, "'{}'", token_str)

@@ -1,4 +1,4 @@
-use std::io::{BufRead};
+use std::io::BufRead;
 
 mod token;
 use lexer::lex;
@@ -80,6 +80,7 @@ impl<R: BufRead> JSONParser<R> {
                 Token::StringLiteral(_) => {
                     // ignore for now
                 }
+                Token::Number => todo!(),
             }
         }
         if !is_json_ended {
