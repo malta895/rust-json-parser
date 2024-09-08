@@ -1,4 +1,4 @@
-name: Build
+name: Build&Test
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-    runs-on:  ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
@@ -23,3 +23,17 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  integration:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build Release
+      run: cargo build -r --verbose
+    - name: Run integration
+      run: JSON_PARSER_EXECUTABLE=./target/release/rust-json-parser ./integration_tests/test_fixtures.sh
+
