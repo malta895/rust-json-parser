@@ -1,14 +1,11 @@
 use core::fmt;
-use std::{
-    error::Error,
-    fmt::{format, write, Formatter},
-    io::{self, BufRead},
-};
+use std::io::{self, BufRead};
 
 #[derive(PartialEq, Debug)]
 enum Token {
     OpenBrace,
     ClosedBrace,
+    NewLine,
     GenericChar(char),
 }
 
@@ -17,6 +14,7 @@ impl fmt::Display for Token {
         let token_str: String = match self {
             Token::OpenBrace => String::from("'{'"),
             Token::ClosedBrace => String::from("'}'"),
+            Token::NewLine => String::from('\n'),
             Token::GenericChar(c) => format!("'{}'", c),
         };
         write!(f, "{}", token_str)
@@ -58,6 +56,9 @@ impl<R: BufRead> JSONParser<R> {
                             }
                             '}' => {
                                 self.tokens.push(Token::ClosedBrace);
+                            }
+                            '\n' => {
+                                self.tokens.push(Token::NewLine);
                             }
                             _ => self.tokens.push(Token::GenericChar(c)),
                         }
@@ -101,24 +102,22 @@ impl<R: BufRead> JSONParser<R> {
                 }
                 Token::ClosedBrace => {
                     if !is_inside_object {
-                        return Err(p.build_json_err(
-                            format!("Unexpected {}", token)
-                        ));
+                        return Err(p.build_json_err(format!("Unexpected {}", token)));
                     }
                     is_inside_object = false;
                     is_json_ended = true;
                 }
-                Token::GenericChar('\n') =>{
+                Token::NewLine => {
                     //ignore
                 }
-                Token::GenericChar(_) => return Err(p.build_json_err(
-                    format!("Unexpected {}", token)
-                )),
+                Token::GenericChar(_) => {
+                    return Err(p.build_json_err(format!("Unexpected {}", token)))
+                }
             }
         }
         if !is_json_ended {
             return Err(p.build_json_err(String::from("Unexpected EOF")));
-        }      
+        }
         Ok(())
     }
 }
@@ -160,10 +159,7 @@ mod lexer_tests {
             current_line: 1,
         };
         jp.lex();
-        assert_eq!(
-            jp.tokens,
-            Vec::from([Token::GenericChar('😊'), ])
-        );
+        assert_eq!(jp.tokens, Vec::from([Token::GenericChar('😊'),]));
     }
 
     #[test]
@@ -215,7 +211,7 @@ mod check_valid_tests {
         assert_eq!("Unexpected 'a': at line 1", found_err.to_string())
     }
 
-        #[test]
+    #[test]
     fn should_report_unexpected_eof_for_empty_file() {
         let found_err = JSONParser::check_valid("".as_bytes()).unwrap_err();
         assert_eq!("Unexpected EOF: at line 1", found_err.to_string())
