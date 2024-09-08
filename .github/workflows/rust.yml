@@ -27,6 +27,7 @@ jobs:
   integration:
     strategy:
       matrix:
+        # TODO: write an integration for windows too
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     

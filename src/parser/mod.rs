@@ -30,6 +30,9 @@ impl<R: BufRead> JSONParser<R> {
                             '}' => {
                                 self.tokens.push(Token::ClosedBrace);
                             }
+                            '"' => {
+                                self.tokens.push(Token::DoubleQuotes);
+                            }
                             '\n' => {
                                 self.tokens.push(Token::NewLine);
                             }
@@ -85,6 +88,7 @@ impl<R: BufRead> JSONParser<R> {
                 Token::GenericChar(_) => {
                     return Err(p.build_json_err(format!("Unexpected {}", token)))
                 }
+                Token::DoubleQuotes => todo!()
             }
         }
         if !is_json_ended {
@@ -98,62 +102,57 @@ impl<R: BufRead> JSONParser<R> {
 mod lexer_tests {
     use super::*;
 
-    #[test]
-    fn should_lex_with_open_brace() {
+    fn run_test_case_with(input_str: &str, expected_tokens: Vec<Token>) {
         let mut jp = JSONParser {
-            reader: "{".as_bytes(),
+            reader: input_str.as_bytes(),
             tokens: Vec::new(),
             current_line: 1,
         };
         jp.lex();
-        assert_eq!(jp.tokens, Vec::from([Token::OpenBrace,]));
+
+        assert_eq!(jp.tokens, expected_tokens);
+    }
+
+    #[test]
+    fn should_lex_with_open_brace() {
+        run_test_case_with("{", Vec::from([Token::OpenBrace]));
     }
 
     #[test]
     fn should_lex_with_open_closed_brace() {
-        let mut jp = JSONParser {
-            reader: "{}".as_bytes(),
-            tokens: Vec::new(),
-            current_line: 1,
-        };
-        jp.lex();
-        assert_eq!(
-            jp.tokens,
-            Vec::from([Token::OpenBrace, Token::ClosedBrace,])
-        );
+        run_test_case_with("{}", Vec::from([Token::OpenBrace, Token::ClosedBrace]));
     }
 
     #[test]
     fn should_lex_emoji() {
-        let mut jp = JSONParser {
-            reader: "😊".as_bytes(),
-            tokens: Vec::new(),
-            current_line: 1,
-        };
-        jp.lex();
-        assert_eq!(jp.tokens, Vec::from([Token::GenericChar('😊'),]));
+        run_test_case_with("😊", Vec::from([Token::GenericChar('😊')]));
     }
 
     #[test]
     fn should_lex_normal_text() {
-        let mut jp = JSONParser {
-            reader: "hello".as_bytes(),
-            tokens: Vec::new(),
-            current_line: 1,
-        };
-        jp.lex().unwrap();
-        assert_eq!(
-            jp.tokens,
+        run_test_case_with(
+            "hello",
             Vec::from([
                 Token::GenericChar('h'),
                 Token::GenericChar('e'),
                 Token::GenericChar('l'),
                 Token::GenericChar('l'),
                 Token::GenericChar('o'),
-            ])
+            ]),
+        );
+    }
+
+    #[test]
+    fn should_lex_double_qoutes() {
+        run_test_case_with(
+            "\"",
+            Vec::from([
+                Token::DoubleQuotes,
+            ]),
         );
     }
 }
+
 
 #[cfg(test)]
 mod check_valid_tests {
