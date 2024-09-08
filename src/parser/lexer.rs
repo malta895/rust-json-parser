@@ -10,6 +10,7 @@ enum State {
     ValueNumber,
     ValueTrue(char),
     ValueFalse(char),
+    ValueNull(char),
 
     ValueStringLiteral,
     Escaping,
@@ -82,6 +83,14 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         ('s', State::ValueFalse('l')) =>   state = State::ValueFalse('s'),
                         ('e', State::ValueFalse('s')) => {
                             tokens.push(Token::BoolFalse);
+                            state = State::Normal;
+                        }
+
+                        ('n', State::AwaitingValue) => state = State::ValueNull('n'),
+                        ('u', State::ValueNull('n')) => state = State::ValueNull('u'),
+                        ('l', State::ValueNull('u')) => state = State::ValueNull('l'),
+                        ('l', State::ValueNull('l')) => {
+                            tokens.push(Token::Null);
                             state = State::Normal;
                         }
 
@@ -453,5 +462,22 @@ mod lexer_tests {
             JSONError::new(format!("Unexpected 'u'"), 1),
         )
     }
+
+    #[test]
+    fn should_lex_null() {
+        run_test_case_with(
+            "{ \"key\": null}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Null,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
 
 }

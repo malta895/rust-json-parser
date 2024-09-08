@@ -11,7 +11,8 @@ pub enum Token {
     StringLiteral(String),
     Number,
     BoolTrue,
-    BoolFalse
+    BoolFalse,
+    Null
 }
 
 const OPEN_BRACE: &str= "{";
@@ -33,7 +34,9 @@ impl fmt::Display for Token {
             Token::Comma => String::from(COMMA),
             Token::Number => String::from("<number>"),
             Token::BoolTrue | Token::BoolFalse => String::from("<boolean>"),
+            Token::Null => String::from("<null>"),
             Token::StringLiteral(_) => String::from("<string literal>"),
+            
         };
         write!(f, "'{}'", token_str)
     }
