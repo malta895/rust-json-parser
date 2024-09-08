@@ -6,6 +6,7 @@ use super::token::Token;
 enum State {
     Normal,
     StringLiteral,
+    Escaping,
 }
 
 pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
@@ -28,20 +29,29 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                         ('}', State::Normal) => {
                             tokens.push(Token::ClosedBrace);
                         }
-                        ('"', _) => {
-                            tokens.push(Token::DoubleQuotes);
-                            if state == State::Normal{
-                                state = State::StringLiteral;
-                            } else {
-                                state = State::Normal;
-                            }
-                        }
                         ('\n', State::Normal) => {
                             tokens.push(Token::NewLine);
                         }
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
                         }
+                        ('\\', State::StringLiteral)=>{
+                            state = State::Escaping;
+                        }
+                        (_, State::Escaping) => {
+                            tokens.push(Token::GenericChar(c));
+                            state = State::StringLiteral;
+                        }
+                        ('"', _) => {
+                            tokens.push(Token::DoubleQuotes);
+
+                            if state == State::Normal{
+                                state = State::StringLiteral;
+                            } else {
+                                state = State::Normal;
+                            }
+                        }
+
                         (_, _) => tokens.push(Token::GenericChar(c)),
                     }
                 }
@@ -130,5 +140,23 @@ mod lexer_tests {
                 Token::DoubleQuotes,
                 Token::DoubleQuotes,
             ]))
+    }
+
+    #[test]
+    fn shuold_ignore_escaped_double_quotes() {
+        run_test_case_with(
+            "{\"ab\\\"c\":\"\"" ,
+             Vec::from([
+                 Token::OpenBrace,
+                 Token::DoubleQuotes,
+                 Token::GenericChar('a'),
+                 Token::GenericChar('b'),
+                 Token::GenericChar('"'),
+                 Token::GenericChar('c'),
+                 Token::DoubleQuotes,
+                 Token::Column,
+                 Token::DoubleQuotes,
+                 Token::DoubleQuotes,
+             ]))
     }
 }
