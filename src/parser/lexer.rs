@@ -29,9 +29,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                 for c in s.chars() {
                     let current_state = state.clone();
                     match (c, current_state) {
+                        
                         ('{', State::Normal) => {
                             tokens.push(Token::OpenBrace);
                         }
+
                         ('}', State::Normal) => {
                             tokens.push(Token::ClosedBrace);
                         }
@@ -39,13 +41,16 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Number);
                             tokens.push(Token::ClosedBrace);
                         }
+
                         ('\n', State::Normal) => {
                             tokens.push(Token::NewLine);
                         }
+
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
                             state = State::AwaitingValue;
                         }
+
                         (',', State::Normal) => {
                             tokens.push(Token::Comma);
                         }
@@ -54,9 +59,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Comma);
                             state = State::Normal;
                         }
+
                         (' ', State::Normal | State::AwaitingValue) => {
                             // ignore space
                         }
+
                         ('1'..='9', State::AwaitingValue | State::ValueNumber) => state = State::ValueNumber,
 
                         ('t', State::AwaitingValue) => {
@@ -86,6 +93,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state = State::Normal;
                             tokens.push(Token::DoubleQuotes);
                         }
+                        
                         (_, State::ValueStringLiteral) => curr_string_literal.push(c),
                         (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
                     }

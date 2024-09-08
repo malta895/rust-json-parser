@@ -80,8 +80,7 @@ impl<R: BufRead> JSONParser<R> {
                 Token::StringLiteral(_) => {
                     // ignore for now
                 }
-                Token::Number => {}
-                Token::BoolTrue => todo!()
+                Token::Number | Token::BoolTrue => {}
             }
         }
         if !is_json_ended {
@@ -152,6 +151,12 @@ mod check_valid_tests {
     #[test]
     fn should_recognize_number() {
         let res = JSONParser::check_valid("{  \"key\": 123}".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_true() {
+        let res = JSONParser::check_valid("{  \"key\": true}".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }
