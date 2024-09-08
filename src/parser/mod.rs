@@ -63,8 +63,13 @@ impl<R: BufRead> JSONParser<R> {
                 Token::Column => {
                     // ignore for now
                 },
-                Token::Comma => todo!(),
-                Token::Space => todo!(),
+                Token::Comma => {
+                    // ignore for now
+                }
+                Token::Space => {
+                    // ignore for now
+                    // TODO: do we need it?
+                },
                 Token::GenericChar(_) => {                    
                     if !is_inside_literal{
                         return Err(p.build_json_err(format!("Unexpected {}", token)))
@@ -151,6 +156,13 @@ mod check_valid_tests {
     fn should_recognize_base_case_with_key_val() {
         let res = 
             JSONParser::check_valid("{\"key\":\"value\"}\n".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_string_with_spaces() {
+        let res = 
+        JSONParser::check_valid("{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }
