@@ -80,7 +80,7 @@ impl<R: BufRead> JSONParser<R> {
                 Token::StringLiteral(_) => {
                     // ignore for now
                 }
-                Token::Number => todo!(),
+                Token::Number => {}
             }
         }
         if !is_json_ended {
@@ -145,6 +145,12 @@ mod check_valid_tests {
     #[test]
     fn should_recognize_string_with_spaces() {
         let res = JSONParser::check_valid("{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_number() {
+        let res = JSONParser::check_valid("{  \"key\": 123}".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }

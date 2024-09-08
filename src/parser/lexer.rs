@@ -48,6 +48,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         (',', State::Normal) => {
                             tokens.push(Token::Comma);
                         }
+                        (',', State::ValueNumber) => {
+                            tokens.push(Token::Number);
+                            tokens.push(Token::Comma);
+                            state = State::Normal;
+                        }
                         (' ', State::Normal | State::AwaitingValue) => {
                             // ignore space
                         }
@@ -294,6 +299,30 @@ mod lexer_tests {
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_a_number_before_comma() {
+        run_test_case_with(
+            "{ \"key\": 123456789, \"key2\":\"\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::Comma,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key2".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
+                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
