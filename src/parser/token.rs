@@ -10,8 +10,6 @@ pub enum Token {
     Comma,
     Space,
     StringLiteral(String),
-    #[deprecated(note="prefer using StringLiteral")]
-    GenericChar(char),
 }
 
 const OPEN_BRACE: &str= "{";
@@ -34,7 +32,6 @@ impl fmt::Display for Token {
             Token::Comma => String::from(COMMA),
             Token::Space => String::from(" "),
             Token::StringLiteral(_) => String::from("<string literal>"),
-            Token::GenericChar(c) => format!("{}", c),
         };
         write!(f, "'{}'", token_str)
     }

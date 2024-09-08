@@ -81,11 +81,8 @@ impl<R: BufRead> JSONParser<R> {
                     // ignore for now
                     // TODO: do we need it?
                 }
-                Token::StringLiteral(_) => todo!(),
-                Token::GenericChar(_) => {
-                    if !is_inside_literal {
-                        return Err(p.build_json_err(format!("Unexpected {}", token)));
-                    }
+                Token::StringLiteral(_) => {
+                    // ignore for now
                 }
             }
         }
