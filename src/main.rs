@@ -3,14 +3,14 @@ use std::io::{BufReader, Read};
 use rust_json_parser::JSONParser;
 
 fn main() {
-    let mut buf = BufReader::new(std::io::stdin());
+    let buf = BufReader::new(std::io::stdin());
 
-match JSONParser::check_valid(buf){ 
-    Err(e) => {
-        eprintln!("{}", e);
+    match JSONParser::check_valid(buf) {
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+        Ok(()) => {
+            println!("ok")
+        }
     }
-    Ok(()) => {
-        println!("ok")
-    }
- }
 }
