@@ -20,7 +20,8 @@ test_json_file() {
     fi
 }
 
-for step_dir in ./tests/step*; do
+curr_dir="$(dirname "$(readlink -f "$0")")"
+for step_dir in $curr_dir/tests/step*; do
     
     for invalid_file in $step_dir/invalid*.json; do
         test_json_file "$invalid_file" 1
