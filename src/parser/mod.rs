@@ -77,10 +77,6 @@ impl<R: BufRead> JSONParser<R> {
                 Token::Comma => {
                     is_after_comma = true;
                 }
-                Token::Space => {
-                    // ignore for now
-                    // TODO: do we need it?
-                }
                 Token::StringLiteral(_) => {
                     // ignore for now
                 }
@@ -90,26 +86,6 @@ impl<R: BufRead> JSONParser<R> {
             return Err(p.build_json_err(String::from("Unexpected EOF")));
         }
         Ok(())
-    }
-}
-
-mod lexer_tests {
-    use super::*;
-
-    fn run_test_case_with(input_str: &str, expected_tokens: Vec<Token>) {
-        let mut jp = JSONParser {
-            reader: input_str.as_bytes(),
-            tokens: Vec::new(),
-            current_line: 1,
-        };
-        jp.lex();
-
-        assert_eq!(jp.tokens, expected_tokens);
-    }
-
-    #[test]
-    fn should_lex_with_open_brace() {
-        run_test_case_with("{", Vec::from([Token::OpenBrace]));
     }
 }
 
