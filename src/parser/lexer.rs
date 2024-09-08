@@ -38,6 +38,9 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                         (',', State::Normal) => {
                             tokens.push(Token::Comma);
                         }
+                        (' ', State::Normal) => {
+                            // ignore space
+                        }
                         (_, State::Escaping) => {
                             // TODO: we should probably only allow to escape " and \
                             tokens.push(Token::GenericChar(c));
@@ -175,7 +178,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn shuold_lex_comma_correctly() {
+    fn should_lex_comma_correctly() {
         run_test_case_with(
             "{\"key\":\"val\",\"key2\":\"val\"}",
             Vec::from([
@@ -195,6 +198,80 @@ mod lexer_tests {
                 Token::DoubleQuotes,
                 Token::GenericChar('k'),
                 Token::GenericChar('e'),
+                Token::GenericChar('y'),
+                Token::GenericChar('2'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::GenericChar('v'),
+                Token::GenericChar('a'),
+                Token::GenericChar('l'),
+                Token::DoubleQuotes,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_ignore_spaces_outside_string_literals(){
+        run_test_case_with(
+            "{  \"key\":\"val\",\n  \"key2\":\"val\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::GenericChar('k'),
+                Token::GenericChar('e'),
+                Token::GenericChar('y'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::GenericChar('v'),
+                Token::GenericChar('a'),
+                Token::GenericChar('l'),
+                Token::DoubleQuotes,
+                Token::Comma,
+                Token::NewLine,
+                Token::DoubleQuotes,
+                Token::GenericChar('k'),
+                Token::GenericChar('e'),
+                Token::GenericChar('y'),
+                Token::GenericChar('2'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::GenericChar('v'),
+                Token::GenericChar('a'),
+                Token::GenericChar('l'),
+                Token::DoubleQuotes,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_consider_spaces_in_string_literals(){
+        run_test_case_with(
+            "{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::GenericChar('k'),
+                Token::GenericChar('e'),
+                Token::GenericChar('y'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::GenericChar('v'),
+                Token::GenericChar('a'),
+                Token::GenericChar(' '),
+                Token::GenericChar('l'),
+                Token::DoubleQuotes,
+                Token::Comma,
+                Token::NewLine,
+                Token::DoubleQuotes,
+                Token::GenericChar('k'),
+                Token::GenericChar('e'),
+                Token::GenericChar(' '),
                 Token::GenericChar('y'),
                 Token::GenericChar('2'),
                 Token::DoubleQuotes,

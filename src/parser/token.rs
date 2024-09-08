@@ -8,6 +8,7 @@ pub enum Token {
     DoubleQuotes,
     Column,
     Comma,
+    Space,
     GenericChar(char),
 }
 
@@ -17,6 +18,7 @@ const NEW_LINE: &str = "\n"; //TODO: make sure this works on windows too
 const DOUBLE_QUOTES: &str = "\"";
 const COLUMN: &str = ":";
 const COMMA: &str = ",";
+const SPACE: &str = " ";
 
 
 impl fmt::Display for Token {
@@ -28,6 +30,7 @@ impl fmt::Display for Token {
             Token::DoubleQuotes => String::from(DOUBLE_QUOTES),
             Token::Column => String::from(COLUMN),
             Token::Comma => String::from(COMMA),
+            Token::Space => String::from(" "),
             Token::GenericChar(c) => format!("{}", c),
         };
         write!(f, "'{}'", token_str)

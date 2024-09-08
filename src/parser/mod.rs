@@ -64,6 +64,7 @@ impl<R: BufRead> JSONParser<R> {
                     // ignore for now
                 },
                 Token::Comma => todo!(),
+                Token::Space => todo!(),
                 Token::GenericChar(_) => {                    
                     if !is_inside_literal{
                         return Err(p.build_json_err(format!("Unexpected {}", token)))
