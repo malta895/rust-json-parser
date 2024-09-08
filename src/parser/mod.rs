@@ -16,10 +16,15 @@ pub struct JSONParser<R: BufRead> {
 }
 
 impl<R: BufRead> JSONParser<R> {
-    fn lex(&mut self) -> Result<(), io::Error> {
-       let tokens = lex(&mut self.reader)?;
-       self.tokens = tokens;
-       Ok(())
+    fn lex(&mut self) -> Result<(), JSONError> {
+        let tokens = lex(&mut self.reader);
+        match tokens {
+            Ok(tokens) => {
+                self.tokens = tokens;
+                Ok(())
+            }
+            Err(lex_error) => Err(lex_error),
+        }
     }
 
     fn new(reader: R) -> JSONParser<R> {
@@ -36,7 +41,7 @@ impl<R: BufRead> JSONParser<R> {
 
     pub fn check_valid(reader: R) -> Result<(), JSONError> {
         let p = &mut Self::new(reader);
-        p.lex().unwrap();
+        p.lex()?;
 
         p.current_line = 1;
         let mut is_inside_object = false;
@@ -68,17 +73,18 @@ impl<R: BufRead> JSONParser<R> {
                 }
                 Token::Column => {
                     // ignore for now
-                },
+                }
                 Token::Comma => {
                     is_after_comma = true;
                 }
                 Token::Space => {
                     // ignore for now
                     // TODO: do we need it?
-                },
-                Token::GenericChar(_) => {                    
-                    if !is_inside_literal{
-                        return Err(p.build_json_err(format!("Unexpected {}", token)))
+                }
+                Token::StringLiteral(_) => todo!(),
+                Token::GenericChar(_) => {
+                    if !is_inside_literal {
+                        return Err(p.build_json_err(format!("Unexpected {}", token)));
                     }
                 }
             }
@@ -89,7 +95,6 @@ impl<R: BufRead> JSONParser<R> {
         Ok(())
     }
 }
-
 
 mod lexer_tests {
     use super::*;
@@ -153,22 +158,19 @@ mod check_valid_tests {
 
     #[test]
     fn should_recognize_base_case() {
-        let res = 
-            JSONParser::check_valid("{\"\":\"\"}\n".as_bytes());
+        let res = JSONParser::check_valid("{\"\":\"\"}\n".as_bytes());
         assert_eq!(Ok(()), res)
     }
 
     #[test]
     fn should_recognize_base_case_with_key_val() {
-        let res = 
-            JSONParser::check_valid("{\"key\":\"value\"}\n".as_bytes());
+        let res = JSONParser::check_valid("{\"key\":\"value\"}\n".as_bytes());
         assert_eq!(Ok(()), res)
     }
 
     #[test]
     fn should_recognize_string_with_spaces() {
-        let res = 
-        JSONParser::check_valid("{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}".as_bytes());
+        let res = JSONParser::check_valid("{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }

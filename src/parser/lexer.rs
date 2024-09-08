@@ -1,6 +1,6 @@
 use std::io::{self, BufRead};
 
-use super::token::Token;
+use super::{error::JSONError, token::Token};
 
 #[derive(PartialEq, Clone)]
 enum State {
@@ -9,7 +9,7 @@ enum State {
     Escaping,
 }
 
-pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
+pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
     let mut tokens = Vec::new();
     let mut state = State::Normal;
     loop {
@@ -20,6 +20,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
             }
             Ok(_) => {
                 let s = String::from_utf8(buf).expect("from_utf8 failed");
+                let mut curr_string_literal = String::new();
                 for c in s.chars() {
                     let current_state = state.clone();
                     match (c, current_state) {
@@ -43,23 +44,33 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                         }
                         (_, State::Escaping) => {
                             // TODO: we should probably only allow to escape " and \
-                            tokens.push(Token::GenericChar(c));
+                            curr_string_literal.push(c);
                             state = State::StringLiteral;
                         }
                         ('\\', State::StringLiteral) => {
                             state = State::Escaping;
                         }
                         ('"', _) => {
-                            tokens.push(Token::DoubleQuotes);
-
                             if state == State::Normal {
                                 state = State::StringLiteral;
                             } else {
+                                tokens.push(
+                                    Token::StringLiteral(curr_string_literal.clone())
+                                );
+                                curr_string_literal.clear();
                                 state = State::Normal;
                             }
+                            tokens.push(Token::DoubleQuotes);
                         }
-
-                        (_, _) => tokens.push(Token::GenericChar(c)),
+                        (_, State::StringLiteral) => curr_string_literal.push(c),
+                        (_, _) => {
+                            return Err(
+                                JSONError::new(
+                                    format!("Unexpected '{}'", c),
+                                    1
+                                )
+                            )
+                        },
                     }
                 }
 
@@ -67,7 +78,8 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                 buf.clear();
             }
             Err(err) => {
-                return Err(err);
+                // TODO: implement line count
+                return Err(JSONError::new(err.to_string(), 1));
             }
         }
     }
@@ -83,6 +95,12 @@ mod lexer_tests {
         assert_eq!(found_tokens, expected_tokens);
     }
 
+    fn run_expected_error_test_case_with(input_str: &str, expected_error: JSONError){
+        let reader = input_str.as_bytes();
+        let found_tokens = lex(reader).unwrap_err();
+        assert_eq!(found_tokens, expected_error);
+    }
+
     #[test]
     fn should_lex_with_open_brace() {
         run_test_case_with("{", Vec::from([Token::OpenBrace]));
@@ -95,20 +113,28 @@ mod lexer_tests {
 
     #[test]
     fn should_lex_emoji() {
-        run_test_case_with("😊", Vec::from([Token::GenericChar('😊')]));
+        run_test_case_with("{\"😊\":\"\"}", 
+        Vec::from([
+            Token::OpenBrace,
+            Token::DoubleQuotes,
+            Token::StringLiteral("😊".to_string()),
+            Token::DoubleQuotes,
+            Token::Column,
+            Token::DoubleQuotes,
+            Token::StringLiteral("".to_string()),
+            Token::DoubleQuotes,
+            Token::ClosedBrace,
+        ]));
     }
 
     #[test]
-    fn should_lex_normal_text() {
-        run_test_case_with(
+    fn should_report_err_lex_normal_text() {
+        run_expected_error_test_case_with(
             "hello",
-            Vec::from([
-                Token::GenericChar('h'),
-                Token::GenericChar('e'),
-                Token::GenericChar('l'),
-                Token::GenericChar('l'),
-                Token::GenericChar('o'),
-            ]),
+            JSONError::new(
+                format!("Unexpected 'h'"),
+                 1
+            )
         );
     }
 
@@ -129,30 +155,28 @@ mod lexer_tests {
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
-                Token::GenericChar('{'),
-                Token::GenericChar(':'),
+                Token::StringLiteral("{:".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
                 Token::DoubleQuotes,
             ]),
         )
     }
 
     #[test]
-    fn shuold_ignore_escaped_double_quotes() {
+    fn should_ignore_escaped_double_quotes() {
         run_test_case_with(
             "{\"ab\\\"c\":\"\"",
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
-                Token::GenericChar('a'),
-                Token::GenericChar('b'),
-                Token::GenericChar('"'),
-                Token::GenericChar('c'),
+                Token::StringLiteral("ab\"c".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
                 Token::DoubleQuotes,
             ]),
         )
@@ -165,13 +189,11 @@ mod lexer_tests {
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
-                Token::GenericChar('a'),
-                Token::GenericChar('b'),
-                Token::GenericChar('\\'),
-                Token::GenericChar('c'),
+                Token::StringLiteral("ab\\c".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
                 Token::DoubleQuotes,
             ]),
         )
@@ -184,28 +206,19 @@ mod lexer_tests {
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
-                Token::GenericChar('k'),
-                Token::GenericChar('e'),
-                Token::GenericChar('y'),
+                Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
-                Token::GenericChar('v'),
-                Token::GenericChar('a'),
-                Token::GenericChar('l'),
+                Token::StringLiteral("val".to_string()),
                 Token::DoubleQuotes,
                 Token::Comma,
                 Token::DoubleQuotes,
-                Token::GenericChar('k'),
-                Token::GenericChar('e'),
-                Token::GenericChar('y'),
-                Token::GenericChar('2'),
+                Token::StringLiteral("key2".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
-                Token::GenericChar('v'),
-                Token::GenericChar('a'),
-                Token::GenericChar('l'),
+                Token::StringLiteral("val".to_string()),
                 Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
@@ -219,29 +232,20 @@ mod lexer_tests {
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
-                Token::GenericChar('k'),
-                Token::GenericChar('e'),
-                Token::GenericChar('y'),
+                Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
-                Token::GenericChar('v'),
-                Token::GenericChar('a'),
-                Token::GenericChar('l'),
+                Token::StringLiteral("val".to_string()),
                 Token::DoubleQuotes,
                 Token::Comma,
                 Token::NewLine,
                 Token::DoubleQuotes,
-                Token::GenericChar('k'),
-                Token::GenericChar('e'),
-                Token::GenericChar('y'),
-                Token::GenericChar('2'),
+                Token::StringLiteral("key2".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
-                Token::GenericChar('v'),
-                Token::GenericChar('a'),
-                Token::GenericChar('l'),
+                Token::StringLiteral("val".to_string()),
                 Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
@@ -255,31 +259,20 @@ mod lexer_tests {
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
-                Token::GenericChar('k'),
-                Token::GenericChar('e'),
-                Token::GenericChar('y'),
+                Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
-                Token::GenericChar('v'),
-                Token::GenericChar('a'),
-                Token::GenericChar(' '),
-                Token::GenericChar('l'),
+                Token::StringLiteral("va l".to_string()),
                 Token::DoubleQuotes,
                 Token::Comma,
                 Token::NewLine,
                 Token::DoubleQuotes,
-                Token::GenericChar('k'),
-                Token::GenericChar('e'),
-                Token::GenericChar(' '),
-                Token::GenericChar('y'),
-                Token::GenericChar('2'),
+                Token::StringLiteral("ke y2".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::DoubleQuotes,
-                Token::GenericChar('v'),
-                Token::GenericChar('a'),
-                Token::GenericChar('l'),
+                Token::StringLiteral("val".to_string()),
                 Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),

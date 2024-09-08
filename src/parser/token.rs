@@ -9,6 +9,8 @@ pub enum Token {
     Column,
     Comma,
     Space,
+    StringLiteral(String),
+    #[deprecated(note="prefer using StringLiteral")]
     GenericChar(char),
 }
 
@@ -31,6 +33,7 @@ impl fmt::Display for Token {
             Token::Column => String::from(COLUMN),
             Token::Comma => String::from(COMMA),
             Token::Space => String::from(" "),
+            Token::StringLiteral(_) => String::from("<string literal>"),
             Token::GenericChar(c) => format!("{}", c),
         };
         write!(f, "'{}'", token_str)
