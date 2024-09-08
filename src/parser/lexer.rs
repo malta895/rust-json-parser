@@ -1,4 +1,4 @@
-use std::io::{self, BufRead};
+use std::io::{BufRead};
 
 use super::{error::JSONError, token::Token};
 

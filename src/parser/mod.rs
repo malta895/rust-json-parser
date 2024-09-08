@@ -1,4 +1,4 @@
-use std::io::{self, BufRead};
+use std::io::{BufRead};
 
 mod token;
 use lexer::lex;
