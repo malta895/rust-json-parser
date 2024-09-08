@@ -8,6 +8,7 @@ enum State {
 
     AwaitingValue,
     ValueNumber,
+    ValueTrue,
 
     ValueStringLiteral,
     Escaping,
@@ -57,6 +58,17 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             // ignore space
                         }
                         ('1'..='9', State::AwaitingValue | State::ValueNumber) => state = State::ValueNumber,
+
+                        ('t', State::AwaitingValue) => {
+                            state = State::ValueTrue;
+                        }
+                        ('r'|'u', State::ValueTrue) => {}
+                        ('e', State::ValueTrue) => {
+                            tokens.push(Token::BoolTrue);
+                            state = State::Normal;
+                        }
+
+
                         ('"' | '\\', State::Escaping) => {
                             curr_string_literal.push(c);
                             state = State::ValueStringLiteral;
@@ -315,6 +327,46 @@ mod lexer_tests {
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::Number,
+                Token::Comma,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key2".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
+                Token::DoubleQuotes,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_true() {
+        run_test_case_with(
+            "{ \"key\": true}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::BoolTrue,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_true_before_comma() {
+        run_test_case_with(
+            "{ \"key\": true, \"key2\":\"\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::BoolTrue,
                 Token::Comma,
                 Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),

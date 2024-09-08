@@ -81,6 +81,7 @@ impl<R: BufRead> JSONParser<R> {
                     // ignore for now
                 }
                 Token::Number => {}
+                Token::BoolTrue => todo!()
             }
         }
         if !is_json_ended {
