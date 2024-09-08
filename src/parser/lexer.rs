@@ -65,7 +65,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             // ignore space
                         }
 
-                        ('1'..='9', State::AwaitingValue | State::ValueNumber) => {
+                        ('0'..='9', State::AwaitingValue | State::ValueNumber) => {
                             state = State::ValueNumber
                         }
 
@@ -345,7 +345,7 @@ mod lexer_tests {
     #[test]
     fn should_lex_a_number_before_comma() {
         run_test_case_with(
-            "{ \"key\": 123456789, \"key2\":\"\"}",
+            "{ \"key\": 1234567890, \"key2\":\"\"}",
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
