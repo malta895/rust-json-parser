@@ -8,7 +8,8 @@ enum State {
 
     AwaitingValue,
     ValueNumber,
-    ValueTrue,
+    ValueTrue(char),
+    ValueFalse(char),
 
     ValueStringLiteral,
     Escaping,
@@ -29,7 +30,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                 for c in s.chars() {
                     let current_state = state.clone();
                     match (c, current_state) {
-                        
                         ('{', State::Normal) => {
                             tokens.push(Token::OpenBrace);
                         }
@@ -64,17 +64,26 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             // ignore space
                         }
 
-                        ('1'..='9', State::AwaitingValue | State::ValueNumber) => state = State::ValueNumber,
-
-                        ('t', State::AwaitingValue) => {
-                            state = State::ValueTrue;
+                        ('1'..='9', State::AwaitingValue | State::ValueNumber) => {
+                            state = State::ValueNumber
                         }
-                        ('r'|'u', State::ValueTrue) => {}
-                        ('e', State::ValueTrue) => {
+
+                        ('t', State::AwaitingValue) => state = State::ValueTrue('t'),
+                        ('r', State::ValueTrue('t')) =>  state = State::ValueTrue('r'),
+                        ('u', State::ValueTrue('r')) =>  state = State::ValueTrue('u'),
+                        ('e', State::ValueTrue('u')) => {
                             tokens.push(Token::BoolTrue);
                             state = State::Normal;
                         }
 
+                        ('f', State::AwaitingValue) => state = State::ValueFalse('f'),
+                        ('a', State::ValueFalse('f')) =>   state = State::ValueFalse('a'),
+                        ('l', State::ValueFalse('a')) =>   state = State::ValueFalse('l'),
+                        ('s', State::ValueFalse('l')) =>   state = State::ValueFalse('s'),
+                        ('e', State::ValueFalse('s')) => {
+                            tokens.push(Token::BoolFalse);
+                            state = State::Normal;
+                        }
 
                         ('"' | '\\', State::Escaping) => {
                             curr_string_literal.push(c);
@@ -93,7 +102,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state = State::Normal;
                             tokens.push(Token::DoubleQuotes);
                         }
-                        
+
                         (_, State::ValueStringLiteral) => curr_string_literal.push(c),
                         (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
                     }
@@ -387,4 +396,62 @@ mod lexer_tests {
             ]),
         )
     }
+
+    #[test]
+    fn should_lex_false() {
+        run_test_case_with(
+            "{ \"key\": false}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::BoolFalse,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_not_lex_misspelled_false() {
+        run_expected_error_test_case_with(
+            "{ \"key\": fsale}",
+            JSONError::new(format!("Unexpected 's'"), 1),
+        )
+    }
+
+
+    #[test]
+    fn should_lex_false_before_comma() {
+        run_test_case_with(
+            "{ \"key\": false, \"key2\":\"\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::BoolFalse,
+                Token::Comma,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key2".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
+                Token::DoubleQuotes,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_not_lex_misspelled_true() {
+        run_expected_error_test_case_with(
+            "{ \"key\": ture}",
+            JSONError::new(format!("Unexpected 'u'"), 1),
+        )
+    }
+
 }
