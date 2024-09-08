@@ -44,7 +44,8 @@ impl<R: BufRead> JSONParser<R> {
         p.lex()?;
 
         p.current_line = 1;
-        let mut is_inside_object = false;
+        let mut obj_depth = 0;
+        let mut is_inside_array = false;
         let mut is_json_ended = false;
         let mut is_inside_literal = false;
         let mut is_after_comma = false;
@@ -52,17 +53,19 @@ impl<R: BufRead> JSONParser<R> {
             match token {
                 Token::OpenBrace => {
                     is_after_comma = false;
-                    is_inside_object = true;
+                    obj_depth += 1;
                 }
                 Token::ClosedBrace => {
-                    if !is_inside_object {
+                    if obj_depth == 0 {
                         return Err(p.build_json_err(format!("Unexpected {}", token)));
                     }
                     if is_after_comma {
                         return Err(p.build_json_err(format!("Unexpected {}", token)));
                     }
-                    is_inside_object = false;
-                    is_json_ended = true;
+                    obj_depth -= 1;
+                    if obj_depth == 0{
+                        is_json_ended = true;
+                    }
                 }
                 Token::NewLine => {
                     // ignore for now
@@ -81,6 +84,8 @@ impl<R: BufRead> JSONParser<R> {
                     // ignore for now
                 }
                 Token::Number | Token::BoolTrue | Token::BoolFalse | Token::Null => {}
+                Token::OpenBracket => {}
+                Token::ClosedBracket => {}
             }
         }
         if !is_json_ended {
@@ -169,6 +174,19 @@ mod check_valid_tests {
     #[test]
     fn should_recognize_null() {
         let res = JSONParser::check_valid("{  \"key\": null}".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_empty_array() {
+        let res = JSONParser::check_valid("{  \"key\": []}".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_nested_objects() {
+        let res =
+            JSONParser::check_valid("{ \"key\": {\n\"inner_key\":\"inner_val\"\n}\n}".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }

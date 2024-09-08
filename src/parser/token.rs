@@ -4,6 +4,8 @@ use core::fmt;
 pub enum Token {
     OpenBrace,
     ClosedBrace,
+    OpenBracket,
+    ClosedBracket,
     NewLine,
     DoubleQuotes,
     Column,
@@ -21,6 +23,8 @@ const NEW_LINE: &str = "\n"; //TODO: make sure this works on windows too
 const DOUBLE_QUOTES: &str = "\"";
 const COLUMN: &str = ":";
 const COMMA: &str = ",";
+const OPEN_BRACKET: &str = "[";
+const CLOSED_BRACKET: &str = "]";
 
 
 impl fmt::Display for Token {
@@ -36,6 +40,8 @@ impl fmt::Display for Token {
             Token::BoolTrue | Token::BoolFalse => String::from("<boolean>"),
             Token::Null => String::from("<null>"),
             Token::StringLiteral(_) => String::from("<string literal>"),
+            Token::OpenBracket => String::from(OPEN_BRACKET),
+            Token::ClosedBracket => String::from(CLOSED_BRACKET),
             
         };
         write!(f, "'{}'", token_str)
