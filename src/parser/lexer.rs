@@ -1,4 +1,4 @@
-use std::io::{BufRead};
+use std::io::BufRead;
 
 use super::{error::JSONError, token::Token};
 
@@ -42,8 +42,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         (' ', State::Normal) => {
                             // ignore space
                         }
-                        (_, State::Escaping) => {
-                            // TODO: we should probably only allow to escape " and \
+                        ('"', State::Escaping) | ('\\', State::Escaping) => {
                             curr_string_literal.push(c);
                             state = State::StringLiteral;
                         }
@@ -54,23 +53,14 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             if state == State::Normal {
                                 state = State::StringLiteral;
                             } else {
-                                tokens.push(
-                                    Token::StringLiteral(curr_string_literal.clone())
-                                );
+                                tokens.push(Token::StringLiteral(curr_string_literal.clone()));
                                 curr_string_literal.clear();
                                 state = State::Normal;
                             }
                             tokens.push(Token::DoubleQuotes);
                         }
                         (_, State::StringLiteral) => curr_string_literal.push(c),
-                        (_, _) => {
-                            return Err(
-                                JSONError::new(
-                                    format!("Unexpected '{}'", c),
-                                    1
-                                )
-                            )
-                        },
+                        (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
                     }
                 }
 
@@ -95,7 +85,7 @@ mod lexer_tests {
         assert_eq!(found_tokens, expected_tokens);
     }
 
-    fn run_expected_error_test_case_with(input_str: &str, expected_error: JSONError){
+    fn run_expected_error_test_case_with(input_str: &str, expected_error: JSONError) {
         let reader = input_str.as_bytes();
         let found_tokens = lex(reader).unwrap_err();
         assert_eq!(found_tokens, expected_error);
@@ -113,29 +103,25 @@ mod lexer_tests {
 
     #[test]
     fn should_lex_emoji() {
-        run_test_case_with("{\"😊\":\"\"}", 
-        Vec::from([
-            Token::OpenBrace,
-            Token::DoubleQuotes,
-            Token::StringLiteral("😊".to_string()),
-            Token::DoubleQuotes,
-            Token::Column,
-            Token::DoubleQuotes,
-            Token::StringLiteral("".to_string()),
-            Token::DoubleQuotes,
-            Token::ClosedBrace,
-        ]));
+        run_test_case_with(
+            "{\"😊\":\"\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("😊".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::StringLiteral("".to_string()),
+                Token::DoubleQuotes,
+                Token::ClosedBrace,
+            ]),
+        );
     }
 
     #[test]
     fn should_report_err_lex_normal_text() {
-        run_expected_error_test_case_with(
-            "hello",
-            JSONError::new(
-                format!("Unexpected 'h'"),
-                 1
-            )
-        );
+        run_expected_error_test_case_with("hello", JSONError::new(format!("Unexpected 'h'"), 1));
     }
 
     #[test]
@@ -183,7 +169,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn shuold_include_escape_char_when_itself_escaped() {
+    fn should_include_escape_char_when_itself_escaped() {
         run_test_case_with(
             "{\"ab\\\\c\":\"\"",
             Vec::from([
@@ -196,6 +182,14 @@ mod lexer_tests {
                 Token::StringLiteral("".to_string()),
                 Token::DoubleQuotes,
             ]),
+        )
+    }
+
+    #[test]
+    fn shuold_not_allow_escaping_unallowed_chars() {
+        run_expected_error_test_case_with(
+            "{\"ab\\c\":\"\"",
+            JSONError::new(format!("Unexpected 'c'"), 1),
         )
     }
 
@@ -226,7 +220,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_ignore_spaces_outside_string_literals(){
+    fn should_ignore_spaces_outside_string_literals() {
         run_test_case_with(
             "{  \"key\":\"val\",\n  \"key2\":\"val\"}",
             Vec::from([
@@ -253,7 +247,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_consider_spaces_in_string_literals(){
+    fn should_consider_spaces_in_string_literals() {
         run_test_case_with(
             "{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}",
             Vec::from([
