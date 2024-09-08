@@ -46,6 +46,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         ('\n', State::Normal) => {
                             tokens.push(Token::NewLine);
                         }
+                        ('\n', State::ValueNumber) => {
+                            state = State::Normal;
+                            tokens.push(Token::Number);
+                            tokens.push(Token::NewLine);
+                        }
 
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
@@ -343,6 +348,23 @@ mod lexer_tests {
     }
 
     #[test]
+    fn should_lex_a_number_before_new_line() {
+        run_test_case_with(
+            "{ \"key\": 123456789\n}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::NewLine,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
     fn should_lex_a_number_before_comma() {
         run_test_case_with(
             "{ \"key\": 1234567890, \"key2\":\"\"}",
@@ -377,6 +399,23 @@ mod lexer_tests {
                 Token::DoubleQuotes,
                 Token::Column,
                 Token::BoolTrue,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_true_before_new_line() {
+        run_test_case_with(
+            "{ \"key\": true\n}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::BoolTrue,
+                Token::NewLine,
                 Token::ClosedBrace,
             ]),
         )
