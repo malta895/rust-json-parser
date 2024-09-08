@@ -35,17 +35,17 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
                         }
-                        ('\\', State::StringLiteral)=>{
-                            state = State::Escaping;
-                        }
                         (_, State::Escaping) => {
                             tokens.push(Token::GenericChar(c));
                             state = State::StringLiteral;
                         }
+                        ('\\', State::StringLiteral) => {
+                            state = State::Escaping;
+                        }
                         ('"', _) => {
                             tokens.push(Token::DoubleQuotes);
 
-                            if state == State::Normal{
+                            if state == State::Normal {
                                 state = State::StringLiteral;
                             } else {
                                 state = State::Normal;
@@ -65,7 +65,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
         }
     }
 }
-
 
 #[cfg(test)]
 mod lexer_tests {
@@ -108,28 +107,18 @@ mod lexer_tests {
 
     #[test]
     fn should_lex_double_qoutes() {
-        run_test_case_with(
-            "\"",
-            Vec::from([
-                Token::DoubleQuotes,
-            ]),
-        );
+        run_test_case_with("\"", Vec::from([Token::DoubleQuotes]));
     }
 
     #[test]
     fn should_lex_column() {
-        run_test_case_with(
-            ":",
-            Vec::from([
-                Token::Column,
-            ]),
-        );
+        run_test_case_with(":", Vec::from([Token::Column]));
     }
 
     #[test]
     fn should_ignore_tokens_when_in_string_literal() {
         run_test_case_with(
-           "{\"{:\":\"\"" ,
+            "{\"{:\":\"\"",
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
@@ -139,24 +128,45 @@ mod lexer_tests {
                 Token::Column,
                 Token::DoubleQuotes,
                 Token::DoubleQuotes,
-            ]))
+            ]),
+        )
     }
 
     #[test]
     fn shuold_ignore_escaped_double_quotes() {
         run_test_case_with(
-            "{\"ab\\\"c\":\"\"" ,
-             Vec::from([
-                 Token::OpenBrace,
-                 Token::DoubleQuotes,
-                 Token::GenericChar('a'),
-                 Token::GenericChar('b'),
-                 Token::GenericChar('"'),
-                 Token::GenericChar('c'),
-                 Token::DoubleQuotes,
-                 Token::Column,
-                 Token::DoubleQuotes,
-                 Token::DoubleQuotes,
-             ]))
+            "{\"ab\\\"c\":\"\"",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::GenericChar('a'),
+                Token::GenericChar('b'),
+                Token::GenericChar('"'),
+                Token::GenericChar('c'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::DoubleQuotes,
+            ]),
+        )
+    }
+
+    #[test]
+    fn shuold_include_escape_char_when_itself_escaped() {
+        run_test_case_with(
+            "{\"ab\\\\c\":\"\"",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::GenericChar('a'),
+                Token::GenericChar('b'),
+                Token::GenericChar('\\'),
+                Token::GenericChar('c'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::DoubleQuotes,
+            ]),
+        )
     }
 }
