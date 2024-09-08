@@ -55,8 +55,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
 
 #[cfg(test)]
 mod lexer_tests {
-    use crate::parser::JSONParser;
-
     use super::*;
 
     fn run_test_case_with(input_str: &str, expected_tokens: Vec<Token>) {
