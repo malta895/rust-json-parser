@@ -36,6 +36,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                             tokens.push(Token::Column);
                         }
                         (_, State::Escaping) => {
+                            // TODO: we should probably only allow to escape " and \
                             tokens.push(Token::GenericChar(c));
                             state = State::StringLiteral;
                         }

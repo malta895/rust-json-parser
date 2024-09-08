@@ -41,6 +41,7 @@ impl<R: BufRead> JSONParser<R> {
         p.current_line = 1;
         let mut is_inside_object = false;
         let mut is_json_ended = false;
+        let mut is_inside_literal = false;
         for token in &p.tokens {
             match token {
                 Token::OpenBrace => {
@@ -54,12 +55,18 @@ impl<R: BufRead> JSONParser<R> {
                     is_json_ended = true;
                 }
                 Token::NewLine => {
-                    //ignore
+                    // ignore for now
                 }
-                Token::DoubleQuotes => todo!(),
-                Token::Column => todo!(),
-                Token::GenericChar(_) => {
-                    return Err(p.build_json_err(format!("Unexpected {}", token)))
+                Token::DoubleQuotes => {
+                    is_inside_literal = !is_inside_literal;
+                }
+                Token::Column => {
+                    // ignore for now
+                },
+                Token::GenericChar(_) => {                    
+                    if !is_inside_literal{
+                        return Err(p.build_json_err(format!("Unexpected {}", token)))
+                    }
                 }
             }
         }
@@ -128,6 +135,20 @@ mod check_valid_tests {
     #[test]
     fn should_not_report_error_for_new_line_at_the_end_of_file() {
         let res = JSONParser::check_valid("{}\n".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_base_case() {
+        let res = 
+            JSONParser::check_valid("{\"\":\"\"}\n".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
+
+    #[test]
+    fn should_recognize_base_case_with_key_val() {
+        let res = 
+            JSONParser::check_valid("{\"key\":\"value\"}\n".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }
