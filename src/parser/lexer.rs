@@ -2,17 +2,15 @@ use std::io::{self, BufRead};
 
 use super::token::Token;
 
+#[derive(PartialEq, Clone)]
 enum State {
     Normal,
     StringLiteral,
 }
 
-struct Lexer {
-    state: State,
-}
-
 pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
     let mut tokens = Vec::new();
+    let mut state = State::Normal;
     loop {
         let mut buf = Vec::<u8>::new();
         match reader.read_until(b'\n', &mut buf) {
@@ -22,23 +20,29 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
             Ok(_) => {
                 let s = String::from_utf8(buf).expect("from_utf8 failed");
                 for c in s.chars() {
-                    match c {
-                        '{' => {
+                    let current_state = state.clone();
+                    match (c, current_state) {
+                        ('{', State::Normal) => {
                             tokens.push(Token::OpenBrace);
                         }
-                        '}' => {
+                        ('}', State::Normal) => {
                             tokens.push(Token::ClosedBrace);
                         }
-                        '"' => {
+                        ('"', _) => {
                             tokens.push(Token::DoubleQuotes);
+                            if state == State::Normal{
+                                state = State::StringLiteral;
+                            } else {
+                                state = State::Normal;
+                            }
                         }
-                        '\n' => {
+                        ('\n', State::Normal) => {
                             tokens.push(Token::NewLine);
                         }
-                        ':' => {
+                        (':', State::Normal) => {
                             tokens.push(Token::Column);
                         }
-                        _ => tokens.push(Token::GenericChar(c)),
+                        (_, _) => tokens.push(Token::GenericChar(c)),
                     }
                 }
 
@@ -110,5 +114,21 @@ mod lexer_tests {
                 Token::Column,
             ]),
         );
+    }
+
+    #[test]
+    fn should_ignore_tokens_when_in_string_literal() {
+        run_test_case_with(
+           "{\"{:\":\"\"" ,
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::GenericChar('{'),
+                Token::GenericChar(':'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::DoubleQuotes,
+            ]))
     }
 }
