@@ -1,4 +1,4 @@
-use std::io::BufReader;
+use std::{io::BufReader, process::exit};
 
 mod parser;
 
@@ -8,6 +8,7 @@ fn main() {
     match parser::JSONParser::check_valid(buf) {
         Err(e) => {
             eprintln!("{}", e);
+            exit(1);
         }
         Ok(()) => {
             println!("ok")
