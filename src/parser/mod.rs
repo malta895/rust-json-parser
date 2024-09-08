@@ -1,37 +1,10 @@
-use core::fmt;
 use std::io::{self, BufRead};
 
-#[derive(PartialEq, Debug)]
-enum Token {
-    OpenBrace,
-    ClosedBrace,
-    NewLine,
-    GenericChar(char),
-}
+mod token;
+use token::Token;
 
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let token_str: String = match self {
-            Token::OpenBrace => String::from("'{'"),
-            Token::ClosedBrace => String::from("'}'"),
-            Token::NewLine => String::from('\n'),
-            Token::GenericChar(c) => format!("'{}'", c),
-        };
-        write!(f, "{}", token_str)
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct JSONError {
-    message: String,
-    line: i64,
-}
-
-impl fmt::Display for JSONError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: at line {}", self.message, self.line)
-    }
-}
+mod error;
+use error::JSONError;
 
 pub struct JSONParser<R: BufRead> {
     reader: R,
@@ -82,12 +55,11 @@ impl<R: BufRead> JSONParser<R> {
             current_line: 1,
         }
     }
+
     fn build_json_err(&self, message: String) -> JSONError {
-        JSONError {
-            message: message.clone(),
-            line: self.current_line,
-        }
+        JSONError::new(message.clone(), self.current_line)
     }
+
     pub fn check_valid(reader: R) -> Result<(), JSONError> {
         let p = &mut Self::new(reader);
         p.lex().unwrap();
@@ -185,7 +157,7 @@ mod lexer_tests {
 
 #[cfg(test)]
 mod check_valid_tests {
-    use crate::JSONParser;
+    use crate::parser::JSONParser;
 
     #[test]
     fn should_not_report_error_for_obj() {
