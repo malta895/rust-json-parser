@@ -42,13 +42,18 @@ impl<R: BufRead> JSONParser<R> {
         let mut is_inside_object = false;
         let mut is_json_ended = false;
         let mut is_inside_literal = false;
+        let mut is_after_comma = false;
         for token in &p.tokens {
             match token {
                 Token::OpenBrace => {
+                    is_after_comma = false;
                     is_inside_object = true;
                 }
                 Token::ClosedBrace => {
                     if !is_inside_object {
+                        return Err(p.build_json_err(format!("Unexpected {}", token)));
+                    }
+                    if is_after_comma {
                         return Err(p.build_json_err(format!("Unexpected {}", token)));
                     }
                     is_inside_object = false;
@@ -58,13 +63,14 @@ impl<R: BufRead> JSONParser<R> {
                     // ignore for now
                 }
                 Token::DoubleQuotes => {
+                    is_after_comma = false;
                     is_inside_literal = !is_inside_literal;
                 }
                 Token::Column => {
                     // ignore for now
                 },
                 Token::Comma => {
-                    // ignore for now
+                    is_after_comma = true;
                 }
                 Token::Space => {
                     // ignore for now
