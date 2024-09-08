@@ -35,6 +35,9 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, io::Error> {
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
                         }
+                        (',', State::Normal) => {
+                            tokens.push(Token::Comma);
+                        }
                         (_, State::Escaping) => {
                             // TODO: we should probably only allow to escape " and \
                             tokens.push(Token::GenericChar(c));
@@ -167,6 +170,41 @@ mod lexer_tests {
                 Token::Column,
                 Token::DoubleQuotes,
                 Token::DoubleQuotes,
+            ]),
+        )
+    }
+
+    #[test]
+    fn shuold_lex_comma_correctly() {
+        run_test_case_with(
+            "{\"key\":\"val\",\"key2\":\"val\"}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::GenericChar('k'),
+                Token::GenericChar('e'),
+                Token::GenericChar('y'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::GenericChar('v'),
+                Token::GenericChar('a'),
+                Token::GenericChar('l'),
+                Token::DoubleQuotes,
+                Token::Comma,
+                Token::DoubleQuotes,
+                Token::GenericChar('k'),
+                Token::GenericChar('e'),
+                Token::GenericChar('y'),
+                Token::GenericChar('2'),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::DoubleQuotes,
+                Token::GenericChar('v'),
+                Token::GenericChar('a'),
+                Token::GenericChar('l'),
+                Token::DoubleQuotes,
+                Token::ClosedBrace,
             ]),
         )
     }
