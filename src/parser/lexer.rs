@@ -6,22 +6,18 @@ use super::{error::JSONError, token::Token};
 enum State {
     Normal,
 
-    ObjValue,
     ValueNumber,
     ValueTrue(char),
     ValueFalse(char),
     ValueNull(char),
-
-    ArrValue,
 
     ValueStringLiteral,
     Escaping,
 }
 
 pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
-    //TODO: this is not a lexer anymore, as it was not necessary. Remove the parser and do everything here
     let mut tokens = Vec::new();
-    let mut state = State::Normal;
+    
     loop {
         let mut buf = Vec::<u8>::new();
         match reader.read_until(b'\n', &mut buf) {
@@ -31,15 +27,36 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
             Ok(_) => {
                 let s = String::from_utf8(buf).expect("from_utf8 failed");
                 let mut curr_string_literal = String::new();
+                let mut state = State::Normal;
                 for c in s.chars() {
-                    let current_state = state.clone();
-                    match (c, current_state) {
-                        ('{', State::Normal | State::ObjValue) => {
+                    match (c, &state) {
+                        ('\\', State::ValueStringLiteral) => {
+                            state = State::Escaping;
+                        }
+                        ('"', State::ValueStringLiteral) => {
+                            tokens.push(Token::StringLiteral(curr_string_literal.clone()));
+                            curr_string_literal.clear();
+                            state = State::Normal;
+                            tokens.push(Token::DoubleQuotes);
+                        }
+                        (_, State::ValueStringLiteral) => curr_string_literal.push(c),
+                        ('"' | '\\', State::Escaping) => {
+                            curr_string_literal.push(c);
+                            state = State::ValueStringLiteral;
+                        }
+
+                        ('"', State::Normal) => {
+                            state = State::ValueStringLiteral;
+                            tokens.push(Token::DoubleQuotes);
+                        }
+  
+
+                        ('{', State::Normal ) => {
                             tokens.push(Token::OpenBrace);
                             state = State::Normal;
                         }
 
-                        ('}', State::Normal | State::ObjValue) => {
+                        ('}', State::Normal) => {
                             tokens.push(Token::ClosedBrace);
                         }
                         ('}', State::ValueNumber) => {
@@ -47,13 +64,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::ClosedBrace);
                         }
 
-                        ('[', State::ObjValue) => {
+                        ('[', _) => {
                             tokens.push(Token::OpenBracket);
-                            state = State::ArrValue;
                         }
-                        (']', State::ArrValue | State::Normal) => {
+                        (']', State::Normal) => {
                             tokens.push(Token::ClosedBracket);
-                            state = State::Normal;
                         }
 
                         ('\n', State::Normal) => {
@@ -67,7 +82,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
-                            state = State::ObjValue;
                         }
 
                         (',', State::Normal) => {
@@ -79,15 +93,19 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state = State::Normal;
                         }
 
-                        (' ', State::Normal | State::ObjValue) => {
+                        (' ', State::Normal) => {
                             // ignore space
                         }
 
-                        ('0'..='9', State::ObjValue | State::ValueNumber) => {
+                        ('0'..='9', State::Normal) => {
                             state = State::ValueNumber
-                        }
+                        }                        
 
-                        ('t', State::ObjValue) => state = State::ValueTrue('t'),
+                        ('0'..='9', State::ValueNumber) => {}
+
+
+
+                        ('t', _) => state = State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => state = State::ValueTrue('r'),
                         ('u', State::ValueTrue('r')) => state = State::ValueTrue('u'),
                         ('e', State::ValueTrue('u')) => {
@@ -95,7 +113,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state = State::Normal;
                         }
 
-                        ('f', State::ObjValue) => state = State::ValueFalse('f'),
+                        ('f', _) => state = State::ValueFalse('f'),
                         ('a', State::ValueFalse('f')) => state = State::ValueFalse('a'),
                         ('l', State::ValueFalse('a')) => state = State::ValueFalse('l'),
                         ('s', State::ValueFalse('l')) => state = State::ValueFalse('s'),
@@ -104,7 +122,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state = State::Normal;
                         }
 
-                        ('n', State::ObjValue) => state = State::ValueNull('n'),
+                        ('n', _) => state = State::ValueNull('n'),
                         ('u', State::ValueNull('n')) => state = State::ValueNull('u'),
                         ('l', State::ValueNull('u')) => state = State::ValueNull('l'),
                         ('l', State::ValueNull('l')) => {
@@ -112,25 +130,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state = State::Normal;
                         }
 
-                        ('"' | '\\', State::Escaping) => {
-                            curr_string_literal.push(c);
-                            state = State::ValueStringLiteral;
-                        }
-                        ('\\', State::ValueStringLiteral) => {
-                            state = State::Escaping;
-                        }
-                        ('"', State::Normal | State::ObjValue | State::ArrValue) => {
-                            state = State::ValueStringLiteral;
-                            tokens.push(Token::DoubleQuotes);
-                        }
-                        ('"', State::ValueStringLiteral) => {
-                            tokens.push(Token::StringLiteral(curr_string_literal.clone()));
-                            curr_string_literal.clear();
-                            state = State::Normal;
-                            tokens.push(Token::DoubleQuotes);
-                        }
-
-                        (_, State::ValueStringLiteral) => curr_string_literal.push(c),
                         (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
                     }
                 }
