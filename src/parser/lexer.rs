@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::{io::BufRead, iter::StepBy};
 
 use super::{error::JSONError, token::Token};
 
@@ -17,7 +17,7 @@ enum State {
 
 pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
     let mut tokens = Vec::new();
-    
+
     loop {
         let mut buf = Vec::<u8>::new();
         match reader.read_until(b'\n', &mut buf) {
@@ -29,105 +29,106 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                 let mut curr_string_literal = String::new();
                 let mut state = State::Normal;
                 for c in s.chars() {
-                    match (c, &state) {
-                        ('\\', State::ValueStringLiteral) => {
-                            state = State::Escaping;
-                        }
+                    state = match (c, &state) {
+                        ('\\', State::ValueStringLiteral) => State::Escaping,
                         ('"', State::ValueStringLiteral) => {
                             tokens.push(Token::StringLiteral(curr_string_literal.clone()));
                             curr_string_literal.clear();
-                            state = State::Normal;
                             tokens.push(Token::DoubleQuotes);
+                            State::Normal
                         }
-                        (_, State::ValueStringLiteral) => curr_string_literal.push(c),
+                        (_, State::ValueStringLiteral) => {
+                            curr_string_literal.push(c);
+                            State::ValueStringLiteral
+                        }
                         ('"' | '\\', State::Escaping) => {
                             curr_string_literal.push(c);
-                            state = State::ValueStringLiteral;
+                            State::ValueStringLiteral
                         }
 
                         ('"', State::Normal) => {
-                            state = State::ValueStringLiteral;
                             tokens.push(Token::DoubleQuotes);
+                            State::ValueStringLiteral
                         }
-  
 
-                        ('{', State::Normal ) => {
+                        ('{', State::Normal) => {
                             tokens.push(Token::OpenBrace);
-                            state = State::Normal;
+                            State::Normal
                         }
 
                         ('}', State::Normal) => {
                             tokens.push(Token::ClosedBrace);
+                            State::Normal
                         }
                         ('}', State::ValueNumber) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::ClosedBrace);
+                            State::ValueNumber
                         }
 
                         ('[', _) => {
                             tokens.push(Token::OpenBracket);
+                            state
                         }
                         (']', State::Normal) => {
                             tokens.push(Token::ClosedBracket);
+                            State::Normal
                         }
 
                         ('\n', State::Normal) => {
                             tokens.push(Token::NewLine);
+                            State::Normal
                         }
                         ('\n', State::ValueNumber) => {
-                            state = State::Normal;
                             tokens.push(Token::Number);
                             tokens.push(Token::NewLine);
+                            State::Normal
                         }
 
                         (':', State::Normal) => {
                             tokens.push(Token::Column);
+                            State::Normal
                         }
 
                         (',', State::Normal) => {
                             tokens.push(Token::Comma);
+                            State::Normal
                         }
                         (',', State::ValueNumber) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::Comma);
-                            state = State::Normal;
+                            State::Normal
                         }
 
-                        (' ', State::Normal) => {
-                            // ignore space
-                        }
+                        (' ', State::Normal) => State::Normal,
 
-                        ('0'..='9', State::Normal) => {
-                            state = State::ValueNumber
-                        }                        
+                        ('0'..='9', State::Normal) => State::ValueNumber,
 
-                        ('0'..='9', State::ValueNumber) => {}
+                        ('0'..='9', State::ValueNumber) => State::ValueNumber,
 
-
-
-                        ('t', _) => state = State::ValueTrue('t'),
-                        ('r', State::ValueTrue('t')) => state = State::ValueTrue('r'),
-                        ('u', State::ValueTrue('r')) => state = State::ValueTrue('u'),
+                        ('t', _) => State::ValueTrue('t'),
+                        ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
+                        ('u', State::ValueTrue('r')) => State::ValueTrue('u'),
                         ('e', State::ValueTrue('u')) => {
                             tokens.push(Token::BoolTrue);
-                            state = State::Normal;
+                            State::Normal
                         }
 
-                        ('f', _) => state = State::ValueFalse('f'),
-                        ('a', State::ValueFalse('f')) => state = State::ValueFalse('a'),
-                        ('l', State::ValueFalse('a')) => state = State::ValueFalse('l'),
-                        ('s', State::ValueFalse('l')) => state = State::ValueFalse('s'),
+                        ('f', _) => State::ValueFalse('f'),
+                        ('a', State::ValueFalse('f')) => State::ValueFalse('a'),
+                        ('l', State::ValueFalse('a')) => State::ValueFalse('l'),
+                        ('s', State::ValueFalse('l')) => State::ValueFalse('s'),
                         ('e', State::ValueFalse('s')) => {
                             tokens.push(Token::BoolFalse);
-                            state = State::Normal;
+                            State::Normal
                         }
 
-                        ('n', _) => state = State::ValueNull('n'),
-                        ('u', State::ValueNull('n')) => state = State::ValueNull('u'),
-                        ('l', State::ValueNull('u')) => state = State::ValueNull('l'),
+                        ('n', _) => State::ValueNull('n'),
+                        ('u', State::ValueNull('n')) => State::ValueNull('u'),
+                        ('l', State::ValueNull('u')) => State::ValueNull('l'),
                         ('l', State::ValueNull('l')) => {
                             tokens.push(Token::Null);
-                            state = State::Normal;
+                            State::Normal
                         }
 
                         (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
@@ -583,7 +584,6 @@ mod lexer_tests {
         )
     }
 
-
     #[test]
     fn should_lex_obj_with_inner_value() {
         run_test_case_with(
@@ -601,7 +601,7 @@ mod lexer_tests {
                 Token::Column,
                 Token::DoubleQuotes,
                 Token::StringLiteral("inner_val".to_string()),
-                Token::DoubleQuotes,                
+                Token::DoubleQuotes,
                 Token::ClosedBrace,
                 Token::ClosedBrace,
             ]),
@@ -626,7 +626,7 @@ mod lexer_tests {
                 Token::Column,
                 Token::DoubleQuotes,
                 Token::StringLiteral("inner_val".to_string()),
-                Token::DoubleQuotes,                
+                Token::DoubleQuotes,
                 Token::NewLine,
                 Token::ClosedBrace,
                 Token::NewLine,
