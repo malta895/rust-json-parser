@@ -117,7 +117,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::ValueNumber(NumberType::Decimal)
                         }
 
-                        ('t', _) => State::ValueTrue('t'),
+                        ('t', State::Normal) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
                         ('u', State::ValueTrue('r')) => State::ValueTrue('u'),
                         ('e', State::ValueTrue('u')) => {
@@ -125,7 +125,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
 
-                        ('f', _) => State::ValueFalse('f'),
+                        ('f', State::Normal) => State::ValueFalse('f'),
                         ('a', State::ValueFalse('f')) => State::ValueFalse('a'),
                         ('l', State::ValueFalse('a')) => State::ValueFalse('l'),
                         ('s', State::ValueFalse('l')) => State::ValueFalse('s'),
@@ -134,7 +134,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
 
-                        ('n', _) => State::ValueNull('n'),
+                        ('n', State::Normal) => State::ValueNull('n'),
                         ('u', State::ValueNull('n')) => State::ValueNull('u'),
                         ('l', State::ValueNull('u')) => State::ValueNull('l'),
                         ('l', State::ValueNull('l')) => {
@@ -733,4 +733,29 @@ mod lexer_tests {
             JSONError::new(format!("Unexpected '.'"), 1),
         )
     }
+
+    #[test]
+    fn should_lex_error_with_zero_followed_by_null() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0null}",
+            JSONError::new(format!("Unexpected 'n'"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_zero_followed_by_true() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0true}",
+            JSONError::new(format!("Unexpected 't'"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_zero_followed_by_false() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0false}",
+            JSONError::new(format!("Unexpected 'f'"), 1),
+        )
+    }
+
 }
