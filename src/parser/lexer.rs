@@ -2,11 +2,19 @@ use std::{io::BufRead, iter::StepBy};
 
 use super::{error::JSONError, token::Token};
 
+#[derive(PartialEq, Clone, Copy)]
+enum NumberType {
+    Integer,
+    Decimal
+}
+
 #[derive(PartialEq, Clone)]
 enum State {
     Normal,
 
-    ValueNumber,
+    ValueNumberLeadingZero,
+    ValueNumber(NumberType),
+
     ValueTrue(char),
     ValueFalse(char),
     ValueNull(char),
@@ -60,10 +68,10 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::ClosedBrace);
                             State::Normal
                         }
-                        ('}', State::ValueNumber) => {
+                        ('}', State::ValueNumber(_) | State::ValueNumberLeadingZero) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::ClosedBrace);
-                            State::ValueNumber
+                            State::Normal
                         }
 
                         ('[', _) => {
@@ -79,7 +87,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::NewLine);
                             State::Normal
                         }
-                        ('\n', State::ValueNumber) => {
+                        ('\n', State::ValueNumber(_) | State::ValueNumberLeadingZero) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::NewLine);
                             State::Normal
@@ -94,7 +102,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Comma);
                             State::Normal
                         }
-                        (',', State::ValueNumber) => {
+                        (',', State::ValueNumber(_) | State::ValueNumberLeadingZero) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::Comma);
                             State::Normal
@@ -102,9 +110,12 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
                         (' ', State::Normal) => State::Normal,
 
-                        ('0'..='9', State::Normal) => State::ValueNumber,
-
-                        ('0'..='9', State::ValueNumber) => State::ValueNumber,
+                        ('0', State::Normal) => State::ValueNumberLeadingZero,
+                        ('1'..='9', State::Normal) => State::ValueNumber(NumberType::Integer),
+                        ('0'..='9', State::ValueNumber(n_type)) => State::ValueNumber(*n_type),
+                        ('.', State::ValueNumber(NumberType::Integer) | State::ValueNumberLeadingZero) => {
+                            State::ValueNumber(NumberType::Decimal)
+                        }
 
                         ('t', _) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
@@ -632,6 +643,94 @@ mod lexer_tests {
                 Token::NewLine,
                 Token::ClosedBrace,
             ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_when_null_interrupted_by_space() {
+        run_expected_error_test_case_with(
+            "{ \"key\": nu ll}",
+            JSONError::new(format!("Unexpected ' '"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_when_true_interrupted_by_space() {
+        run_expected_error_test_case_with(
+            "{ \"key\": t  rue}",
+            JSONError::new(format!("Unexpected ' '"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_when_number_starts_with_zero() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 011}",
+            JSONError::new(format!("Unexpected '1'"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_when_number_is_zero() {
+        run_test_case_with(
+            "{ \"key\": 0}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_decimal_number() {
+        run_test_case_with(
+            "{ \"key\": 1.5}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_decimal_number_with_leading_zero() {
+        run_test_case_with(
+            "{ \"key\": 0.2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_decimal_with_multiple_points() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0.1.1}",
+            JSONError::new(format!("Unexpected '.'"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_decimal_with_multiple_consecutive_points() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0..1}",
+            JSONError::new(format!("Unexpected '.'"), 1),
         )
     }
 }
