@@ -74,7 +74,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
 
-                        ('[', _) => {
+                        ('[', State::Normal) => {
                             tokens.push(Token::OpenBracket);
                             state
                         }
@@ -755,6 +755,14 @@ mod lexer_tests {
         run_expected_error_test_case_with(
             "{ \"key\": 0false}",
             JSONError::new(format!("Unexpected 'f'"), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_zero_followed_by_open_bracket() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0[}",
+            JSONError::new(format!("Unexpected '['"), 1),
         )
     }
 
