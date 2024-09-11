@@ -18,7 +18,11 @@ enum NumberState {
 impl NumberState {
     pub fn is_final(self) -> bool {
         match self {
-            Self::LeadingZero | Self::Integer | Self::Decimal | Self::ExpLeadingZero | Self::ExpInteger => true,
+            Self::LeadingZero
+            | Self::Integer
+            | Self::Decimal
+            | Self::ExpLeadingZero
+            | Self::ExpInteger => true,
             _ => false,
         }
     }
@@ -98,6 +102,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             state
                         }
                         (']', State::Normal) => {
+                            tokens.push(Token::ClosedBracket);
+                            State::Normal
+                        }
+                        (']', State::ValueNumber(n)) if n.is_final() => {
+                            tokens.push(Token::Number);
                             tokens.push(Token::ClosedBracket);
                             State::Normal
                         }
@@ -1093,8 +1102,43 @@ mod lexer_tests {
         )
     }
 
-    // #[test]
-    // fn should_lex_correctly_array_with_zero() {
-    //     run_test_case_with("[0]", Vec::from([Token::OpenBracket, Token::ClosedBracket]))
-    // }
+    #[test]
+    fn should_lex_correctly_array_with_zero() {
+        run_test_case_with(
+            "[0]",
+            Vec::from([Token::OpenBracket, Token::Number, Token::ClosedBracket]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_array_with_one() {
+        run_test_case_with(
+            "[1]",
+            Vec::from([Token::OpenBracket, Token::Number, Token::ClosedBracket]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_array_with_decimal() {
+        run_test_case_with(
+            "[1,2.6]",
+            Vec::from([Token::OpenBracket, Token::Number, Token::Comma, Token::Number, Token::ClosedBracket]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_array_with_exp() {
+        run_test_case_with(
+            "[1,2.6e9]",
+            Vec::from([Token::OpenBracket, Token::Number, Token::Comma, Token::Number, Token::ClosedBracket]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_array_with_zero_exp() {
+        run_test_case_with(
+            "[1,2.6e0]",
+            Vec::from([Token::OpenBracket, Token::Number, Token::Comma, Token::Number, Token::ClosedBracket]),
+        )
+    }
 }
