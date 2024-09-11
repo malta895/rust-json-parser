@@ -4,8 +4,9 @@ use super::{error::JSONError, token::Token};
 
 #[derive(PartialEq, Clone, Copy)]
 enum NumberType {
+    Negative,
     Integer,
-    Decimal
+    Decimal,
 }
 
 #[derive(PartialEq, Clone)]
@@ -110,12 +111,18 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
                         (' ', State::Normal) => State::Normal,
 
-                        ('0', State::Normal) => State::ValueNumberLeadingZero,
-                        ('1'..='9', State::Normal) => State::ValueNumber(NumberType::Integer),
-                        ('0'..='9', State::ValueNumber(n_type)) => State::ValueNumber(*n_type),
-                        ('.', State::ValueNumber(NumberType::Integer) | State::ValueNumberLeadingZero) => {
-                            State::ValueNumber(NumberType::Decimal)
+                        ('-', State::Normal) => State::ValueNumber(NumberType::Negative),
+                        ('0', State::Normal | State::ValueNumber(NumberType::Negative)) => {
+                            State::ValueNumberLeadingZero
                         }
+                        ('1'..='9', State::Normal | State::ValueNumber(NumberType::Negative)) => {
+                            State::ValueNumber(NumberType::Integer)
+                        }
+                        ('0'..='9', State::ValueNumber(n_type)) => State::ValueNumber(*n_type),
+                        (
+                            '.',
+                            State::ValueNumber(NumberType::Integer) | State::ValueNumberLeadingZero,
+                        ) => State::ValueNumber(NumberType::Decimal),
 
                         ('t', State::Normal) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
@@ -766,4 +773,35 @@ mod lexer_tests {
         )
     }
 
+    #[test]
+    fn should_lex_correctly_negative_number_leading_zero() {
+        run_test_case_with(
+            "{ \"key\": -0.2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_negative_number() {
+        run_test_case_with(
+            "{ \"key\": -1.2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
 }
