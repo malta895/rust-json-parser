@@ -3,8 +3,9 @@ use std::{io::BufRead, iter::StepBy};
 use super::{error::JSONError, token::Token};
 
 #[derive(PartialEq, Clone, Copy)]
-enum NumberType {
-    Negative,
+enum NumberState {
+    LeadingZero,
+    Sign,
     Integer,
     Decimal,
 }
@@ -13,8 +14,7 @@ enum NumberType {
 enum State {
     Normal,
 
-    ValueNumberLeadingZero,
-    ValueNumber(NumberType),
+    ValueNumber(NumberState),
 
     ValueTrue(char),
     ValueFalse(char),
@@ -69,7 +69,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::ClosedBrace);
                             State::Normal
                         }
-                        ('}', State::ValueNumber(_) | State::ValueNumberLeadingZero) => {
+                        ('}', State::ValueNumber(_)) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::ClosedBrace);
                             State::Normal
@@ -88,7 +88,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::NewLine);
                             State::Normal
                         }
-                        ('\n', State::ValueNumber(_) | State::ValueNumberLeadingZero) => {
+                        ('\n', State::ValueNumber(_)) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::NewLine);
                             State::Normal
@@ -103,7 +103,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Comma);
                             State::Normal
                         }
-                        (',', State::ValueNumber(_) | State::ValueNumberLeadingZero) => {
+                        (',', State::ValueNumber(_)) => {
                             tokens.push(Token::Number);
                             tokens.push(Token::Comma);
                             State::Normal
@@ -111,18 +111,19 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
                         (' ', State::Normal) => State::Normal,
 
-                        ('-', State::Normal) => State::ValueNumber(NumberType::Negative),
-                        ('0', State::Normal | State::ValueNumber(NumberType::Negative)) => {
-                            State::ValueNumberLeadingZero
+                        ('-', State::Normal) => State::ValueNumber(NumberState::Sign),
+                        ('+', State::Normal) => State::ValueNumber(NumberState::Sign),
+                        ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                            State::ValueNumber(NumberState::LeadingZero)
                         }
-                        ('1'..='9', State::Normal | State::ValueNumber(NumberType::Negative)) => {
-                            State::ValueNumber(NumberType::Integer)
+                        ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                            State::ValueNumber(NumberState::Integer)
                         }
-                        ('0'..='9', State::ValueNumber(n_type)) => State::ValueNumber(*n_type),
+                        ('0'..='9', State::ValueNumber(n_type)) if *n_type != NumberState::LeadingZero => State::ValueNumber(*n_type),
                         (
                             '.',
-                            State::ValueNumber(NumberType::Integer) | State::ValueNumberLeadingZero,
-                        ) => State::ValueNumber(NumberType::Decimal),
+                            State::ValueNumber(NumberState::Integer | NumberState::LeadingZero)
+                        ) => State::ValueNumber(NumberState::Decimal),
 
                         ('t', State::Normal) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
@@ -793,6 +794,54 @@ mod lexer_tests {
     fn should_lex_correctly_negative_number() {
         run_test_case_with(
             "{ \"key\": -1.2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_whitespaces_before_column() {
+        run_test_case_with(
+            "{ \"key\"  : -1.2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_plus_number() {
+        run_test_case_with(
+            "{ \"key\": +1.2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_plus_number_before_zero() {
+        run_test_case_with(
+            "{ \"key\": +0}",
             Vec::from([
                 Token::OpenBrace,
                 Token::DoubleQuotes,
