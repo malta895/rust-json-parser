@@ -11,14 +11,20 @@ enum NumberState {
     LeadingZero,
     Integer,
     Decimal,
+    ExpLeadingZero,
+    ExpInteger,
 }
 
 impl NumberState {
     pub fn is_final(self) -> bool {
         match self {
-            Self::LeadingZero | Self::Integer | Self::Decimal => true,
+            Self::LeadingZero | Self::Integer | Self::Decimal | Self::ExpLeadingZero | Self::ExpInteger => true,
             _ => false,
         }
+    }
+
+    pub fn is_exp(self) -> bool {
+        self == Self::ExpLeadingZero || self == Self::ExpInteger
     }
 }
 
@@ -124,18 +130,24 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         (' ', State::Normal) => State::Normal,
 
                         ('-' | '+', State::Normal) => State::ValueNumber(NumberState::Sign),
-                        ('e' | 'E', State::ValueNumber(NumberState::LeadingZero)) => {
+                        ('e' | 'E', State::ValueNumber(n)) if n.is_final() && !n.is_exp() => {
                             State::ValueNumber(NumberState::Exp)
                         }
-                        (
-                            '0',
-                            State::Normal
-                            | State::ValueNumber(NumberState::Sign | NumberState::Exp),
-                        ) => State::ValueNumber(NumberState::LeadingZero),
+                        ('0', State::ValueNumber(NumberState::Exp)) => {
+                            State::ValueNumber(NumberState::ExpLeadingZero)
+                        }
+                        ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                            State::ValueNumber(NumberState::LeadingZero)
+                        }
+                        ('1'..='9', State::ValueNumber(NumberState::Exp)) => {
+                            State::ValueNumber(NumberState::ExpInteger)
+                        }
                         ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
                             State::ValueNumber(NumberState::Integer)
                         }
-                        ('0'..='9', State::ValueNumber(NumberState::Point)) => State::ValueNumber(NumberState::Decimal),
+                        ('0'..='9', State::ValueNumber(NumberState::Point)) => {
+                            State::ValueNumber(NumberState::Decimal)
+                        }
                         ('0'..='9', State::ValueNumber(n_type))
                             if *n_type != NumberState::LeadingZero =>
                         {
@@ -145,7 +157,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             '.',
                             State::ValueNumber(NumberState::Integer | NumberState::LeadingZero),
                         ) => State::ValueNumber(NumberState::Point),
-
 
                         ('t', State::Normal) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
@@ -909,6 +920,78 @@ mod lexer_tests {
     }
 
     #[test]
+    fn should_lex_correctly_exponential_e_after_int() {
+        run_test_case_with(
+            "{ \"key\": 1e0}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_exponential_e_after_decimal() {
+        run_test_case_with(
+            "{ \"key\": 1.2e0}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_exponential_non_zero_exp() {
+        run_test_case_with(
+            "{ \"key\": 1.2E2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_exponential_decimal_exp_leading_zero() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 1.2E0.2}",
+            JSONError::new("Unexpected '.'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_exponential_decimal_exp() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 1.2e2.4}",
+            JSONError::new("Unexpected '.'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_repeated_exp() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 1e0e0}",
+            JSONError::new("Unexpected 'e'".to_string(), 1),
+        )
+    }
+
+    #[test]
     fn should_lex_error_with_plus_followed_by_brace() {
         run_expected_error_test_case_with(
             "{ \"key\": +}",
@@ -954,7 +1037,6 @@ mod lexer_tests {
         )
     }
 
-
     #[test]
     fn should_lex_error_with_e_followed_by_brace() {
         run_expected_error_test_case_with(
@@ -994,4 +1076,25 @@ mod lexer_tests {
             JSONError::new("Unexpected '\n'".to_string(), 1),
         )
     }
+
+    #[test]
+    fn should_lex_error_with_exp_followed_by_comma() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0e,\"\":0}",
+            JSONError::new("Unexpected ','".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_exp_followed_by_return() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0e\n,\"\":0}",
+            JSONError::new("Unexpected '\n'".to_string(), 1),
+        )
+    }
+
+    // #[test]
+    // fn should_lex_correctly_array_with_zero() {
+    //     run_test_case_with("[0]", Vec::from([Token::OpenBracket, Token::ClosedBracket]))
+    // }
 }
