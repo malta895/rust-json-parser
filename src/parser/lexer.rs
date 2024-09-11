@@ -4,10 +4,22 @@ use super::{error::JSONError, token::Token};
 
 #[derive(PartialEq, Clone, Copy)]
 enum NumberState {
-    LeadingZero,
     Sign,
+    Exp,
+    Point,
+
+    LeadingZero,
     Integer,
     Decimal,
+}
+
+impl NumberState {
+    pub fn is_final(self) -> bool {
+        match self {
+            Self::LeadingZero | Self::Integer | Self::Decimal => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(PartialEq, Clone)]
@@ -69,7 +81,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::ClosedBrace);
                             State::Normal
                         }
-                        ('}', State::ValueNumber(_)) => {
+                        ('}', State::ValueNumber(n)) if n.is_final() => {
                             tokens.push(Token::Number);
                             tokens.push(Token::ClosedBrace);
                             State::Normal
@@ -88,7 +100,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::NewLine);
                             State::Normal
                         }
-                        ('\n', State::ValueNumber(_)) => {
+                        ('\n', State::ValueNumber(n)) if n.is_final() => {
                             tokens.push(Token::Number);
                             tokens.push(Token::NewLine);
                             State::Normal
@@ -103,7 +115,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Comma);
                             State::Normal
                         }
-                        (',', State::ValueNumber(_)) => {
+                        (',', State::ValueNumber(n)) if n.is_final() => {
                             tokens.push(Token::Number);
                             tokens.push(Token::Comma);
                             State::Normal
@@ -111,19 +123,29 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
                         (' ', State::Normal) => State::Normal,
 
-                        ('-', State::Normal) => State::ValueNumber(NumberState::Sign),
-                        ('+', State::Normal) => State::ValueNumber(NumberState::Sign),
-                        ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
-                            State::ValueNumber(NumberState::LeadingZero)
+                        ('-' | '+', State::Normal) => State::ValueNumber(NumberState::Sign),
+                        ('e' | 'E', State::ValueNumber(NumberState::LeadingZero)) => {
+                            State::ValueNumber(NumberState::Exp)
                         }
+                        (
+                            '0',
+                            State::Normal
+                            | State::ValueNumber(NumberState::Sign | NumberState::Exp),
+                        ) => State::ValueNumber(NumberState::LeadingZero),
                         ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
                             State::ValueNumber(NumberState::Integer)
                         }
-                        ('0'..='9', State::ValueNumber(n_type)) if *n_type != NumberState::LeadingZero => State::ValueNumber(*n_type),
+                        ('0'..='9', State::ValueNumber(NumberState::Point)) => State::ValueNumber(NumberState::Decimal),
+                        ('0'..='9', State::ValueNumber(n_type))
+                            if *n_type != NumberState::LeadingZero =>
+                        {
+                            State::ValueNumber(*n_type)
+                        }
                         (
                             '.',
-                            State::ValueNumber(NumberState::Integer | NumberState::LeadingZero)
-                        ) => State::ValueNumber(NumberState::Decimal),
+                            State::ValueNumber(NumberState::Integer | NumberState::LeadingZero),
+                        ) => State::ValueNumber(NumberState::Point),
+
 
                         ('t', State::Normal) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
@@ -851,6 +873,125 @@ mod lexer_tests {
                 Token::Number,
                 Token::ClosedBrace,
             ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_exponential_e_after_zero() {
+        run_test_case_with(
+            "{ \"key\": 0e0}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_exponential_capital_e_after_zero() {
+        run_test_case_with(
+            "{ \"key\": 0E0}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_plus_followed_by_brace() {
+        run_expected_error_test_case_with(
+            "{ \"key\": +}",
+            JSONError::new("Unexpected '}'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_minus_followed_by_brace() {
+        run_expected_error_test_case_with(
+            "{ \"key\": -}",
+            JSONError::new("Unexpected '}'".to_string(), 1),
+        )
+    }
+    #[test]
+    fn should_lex_error_with_plus_followed_by_comma() {
+        run_expected_error_test_case_with(
+            "{ \"key\": +,\"\":0}",
+            JSONError::new("Unexpected ','".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_minus_followed_by_newline() {
+        run_expected_error_test_case_with(
+            "{ \"key\": -\n}",
+            JSONError::new("Unexpected '\n'".to_string(), 1),
+        )
+    }
+    #[test]
+    fn should_lex_error_with_plus_followed_by_newline() {
+        run_expected_error_test_case_with(
+            "{ \"key\": +\n}",
+            JSONError::new("Unexpected '\n'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_minus_followed_by_comma() {
+        run_expected_error_test_case_with(
+            "{ \"key\": -,\"\":0}",
+            JSONError::new("Unexpected ','".to_string(), 1),
+        )
+    }
+
+
+    #[test]
+    fn should_lex_error_with_e_followed_by_brace() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0e}",
+            JSONError::new("Unexpected '}'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_capital_e_followed_by_brace() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0E}",
+            JSONError::new("Unexpected '}'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_point_followed_by_brace() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0.}",
+            JSONError::new("Unexpected '}'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_point_followed_by_comma() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0.,\"\":0}",
+            JSONError::new("Unexpected ','".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_with_point_followed_by_return() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 0.\n,\"\":0}",
+            JSONError::new("Unexpected '\n'".to_string(), 1),
         )
     }
 }
