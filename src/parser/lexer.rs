@@ -31,6 +31,10 @@ impl NumberState {
     pub fn is_exp(self) -> bool {
         self == Self::ExpLeadingZero || self == Self::ExpInteger
     }
+
+    pub fn is_leading_zero(self) -> bool {
+        self == Self::LeadingZero || self == Self::ExpLeadingZero
+    }
 }
 
 #[derive(PartialEq, Clone)]
@@ -146,7 +150,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         ('e' | 'E', State::ValueNumber(n)) if n.is_final() && !n.is_exp() => {
                             State::ValueNumber(NumberState::Exp)
                         }
-                        ('0', State::ValueNumber(NumberState::Exp)) => {
+                        ('0', State::ValueNumber(NumberState::Exp | NumberState::ExpSign)) => {
                             State::ValueNumber(NumberState::ExpLeadingZero)
                         }
                         ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
@@ -163,7 +167,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::ValueNumber(NumberState::Decimal)
                         }
                         ('0'..='9', State::ValueNumber(n_type))
-                            if *n_type != NumberState::LeadingZero =>
+                            if !n_type.is_leading_zero() =>
                         {
                             State::ValueNumber(*n_type)
                         }
@@ -1026,6 +1030,14 @@ mod lexer_tests {
         run_expected_error_test_case_with(
             "{ \"key\": 1.2E-0.2}",
             JSONError::new("Unexpected '.'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_exponential_decimal_exp_leading_zero_double_zero() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 1.2E-00}",
+            JSONError::new("Unexpected '0'".to_string(), 1),
         )
     }
 
