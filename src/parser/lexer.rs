@@ -139,9 +139,13 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Number);
                             tokens.push(Token::Comma);
                             State::Normal
-                        }
+                        }                        
 
                         (' ', State::Normal) => State::Normal,
+                        (' ', State::ValueNumber(n)) if n.is_final() => {
+                            tokens.push(Token::Number)´
+                            State::Normal
+                        },
 
                         ('-' | '+', State::Normal) => State::ValueNumber(NumberState::Sign),
                         ('-' | '+', State::ValueNumber(NumberState::Exp)) => {
@@ -840,6 +844,56 @@ mod lexer_tests {
             ]),
         )
     }
+
+    #[test]
+    fn should_lex_correctly_decimal_space_bracket() {
+        run_test_case_with(
+            "{ \"key\": -0.2 }",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_integer_spaces_bracket() {
+        run_test_case_with(
+            "{ \"key\": 5  }",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+
+    #[test]
+    fn should_lex_correctly_exponential_spaces_bracket() {
+        run_test_case_with(
+            "{ \"key\": 5e10  }",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
 
     #[test]
     fn should_lex_correctly_negative_number() {
