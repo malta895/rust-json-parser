@@ -53,7 +53,7 @@ enum State {
 
 fn parse_string_number_to_float(number_string: String) -> Result<f64, JSONError> {
     number_string
-        .parse::<f64>()
+        .parse()
         .map_err(|e| JSONError::new(format!("Unexpected error: {}", e), 1))
 }
 
