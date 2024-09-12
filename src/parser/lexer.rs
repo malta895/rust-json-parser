@@ -1,4 +1,4 @@
-use std::{io::BufRead, iter::StepBy};
+use std::io::BufRead;
 
 use super::{error::JSONError, token::Token};
 
@@ -51,6 +51,12 @@ enum State {
     Escaping,
 }
 
+fn parse_string_number_to_float(number_string: String) -> Result<f64, JSONError> {
+    number_string
+        .parse::<f64>()
+        .map_err(|e| JSONError::new(format!("Unexpected error: {}", e), 1))
+}
+
 pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
     let mut tokens = Vec::new();
 
@@ -63,6 +69,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
             Ok(_) => {
                 let s = String::from_utf8(buf).expect("from_utf8 failed");
                 let mut curr_string_literal = String::new();
+                let mut curr_number_string = String::new();
                 let mut state = State::Normal;
                 for c in s.chars() {
                     state = match (c, &state) {
@@ -97,7 +104,10 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
                         ('}', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number);
+                            tokens.push(Token::Number(parse_string_number_to_float(
+                                curr_number_string.clone(),
+                            )?));
+                            curr_number_string.clear();
                             tokens.push(Token::ClosedBrace);
                             State::Normal
                         }
@@ -111,7 +121,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
                         (']', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number);
+                            tokens.push(Token::Number(parse_string_number_to_float(
+                                curr_number_string.clone(),
+                            )?));
+                            curr_number_string.clear();
+
                             tokens.push(Token::ClosedBracket);
                             State::Normal
                         }
@@ -121,7 +135,10 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
                         ('\n', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number);
+                            tokens.push(Token::Number(parse_string_number_to_float(
+                                curr_number_string.clone(),
+                            )?));
+                            curr_number_string.clear();
                             tokens.push(Token::NewLine);
                             State::Normal
                         }
@@ -136,49 +153,73 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
                         (',', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number);
+                            tokens.push(Token::Number(parse_string_number_to_float(
+                                curr_number_string.clone(),
+                            )?));
+                            curr_number_string.clear();
                             tokens.push(Token::Comma);
                             State::Normal
-                        }                        
+                        }
 
                         (' ', State::Normal) => State::Normal,
                         (' ', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number);
+                            tokens.push(Token::Number(parse_string_number_to_float(
+                                curr_number_string.clone(),
+                            )?));
+                            curr_number_string.clear();
                             State::Normal
-                        },
+                        }
 
-                        ('-' | '+', State::Normal) => State::ValueNumber(NumberState::Sign),
+                        ('-' | '+', State::Normal) => {
+                            if c == '-' {
+                                curr_number_string.push(c);
+                            }
+                            State::ValueNumber(NumberState::Sign)
+                        }
                         ('-' | '+', State::ValueNumber(NumberState::Exp)) => {
+                            if c == '-' {
+                                curr_number_string.push(c);
+                            }
                             State::ValueNumber(NumberState::ExpSign)
                         }
                         ('e' | 'E', State::ValueNumber(n)) if n.is_final() && !n.is_exp() => {
+                            curr_number_string.push('e');
                             State::ValueNumber(NumberState::Exp)
                         }
                         ('0', State::ValueNumber(NumberState::Exp | NumberState::ExpSign)) => {
+                            curr_number_string.push('0');
                             State::ValueNumber(NumberState::ExpLeadingZero)
                         }
                         ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                            curr_number_string.push('0');
                             State::ValueNumber(NumberState::LeadingZero)
                         }
                         (
                             '1'..='9',
                             State::ValueNumber(NumberState::Exp | NumberState::ExpSign),
-                        ) => State::ValueNumber(NumberState::ExpInteger),
+                        ) => {
+                            curr_number_string.push(c);
+                            State::ValueNumber(NumberState::ExpInteger)
+                        }
                         ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                            curr_number_string.push(c);
                             State::ValueNumber(NumberState::Integer)
                         }
                         ('0'..='9', State::ValueNumber(NumberState::Point)) => {
+                            curr_number_string.push(c);
                             State::ValueNumber(NumberState::Decimal)
                         }
-                        ('0'..='9', State::ValueNumber(n_type))
-                            if !n_type.is_leading_zero() =>
-                        {
+                        ('0'..='9', State::ValueNumber(n_type)) if !n_type.is_leading_zero() => {
+                            curr_number_string.push(c);
                             State::ValueNumber(*n_type)
                         }
                         (
                             '.',
                             State::ValueNumber(NumberState::Integer | NumberState::LeadingZero),
-                        ) => State::ValueNumber(NumberState::Point),
+                        ) => {
+                            curr_number_string.push('.');
+                            State::ValueNumber(NumberState::Point)
+                        }
 
                         ('t', State::Normal) => State::ValueTrue('t'),
                         ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
@@ -428,7 +469,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(123456789.),
                 Token::ClosedBrace,
             ]),
         )
@@ -444,7 +485,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(123456789.),
                 Token::NewLine,
                 Token::ClosedBrace,
             ]),
@@ -461,7 +502,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1234567890.),
                 Token::Comma,
                 Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),
@@ -743,7 +784,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(0.),
                 Token::ClosedBrace,
             ]),
         )
@@ -759,7 +800,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1.5),
                 Token::ClosedBrace,
             ]),
         )
@@ -775,7 +816,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(0.2),
                 Token::ClosedBrace,
             ]),
         )
@@ -839,7 +880,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(-0.2),
                 Token::ClosedBrace,
             ]),
         )
@@ -855,7 +896,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(-0.2),
                 Token::ClosedBrace,
             ]),
         )
@@ -871,12 +912,11 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(5.),
                 Token::ClosedBrace,
             ]),
         )
     }
-
 
     #[test]
     fn should_lex_correctly_exponential_spaces_bracket() {
@@ -888,12 +928,11 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(5e10),
                 Token::ClosedBrace,
             ]),
         )
     }
-
 
     #[test]
     fn should_lex_correctly_negative_number() {
@@ -905,7 +944,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(-1.2),
                 Token::ClosedBrace,
             ]),
         )
@@ -921,7 +960,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(-1.2),
                 Token::ClosedBrace,
             ]),
         )
@@ -937,7 +976,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1.2),
                 Token::ClosedBrace,
             ]),
         )
@@ -953,7 +992,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(0.),
                 Token::ClosedBrace,
             ]),
         )
@@ -969,7 +1008,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(0.),
                 Token::ClosedBrace,
             ]),
         )
@@ -985,7 +1024,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(0.),
                 Token::ClosedBrace,
             ]),
         )
@@ -1001,7 +1040,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1e0),
                 Token::ClosedBrace,
             ]),
         )
@@ -1017,7 +1056,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1.2e0),
                 Token::ClosedBrace,
             ]),
         )
@@ -1033,7 +1072,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1.2e2),
                 Token::ClosedBrace,
             ]),
         )
@@ -1049,7 +1088,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1.2e2),
                 Token::ClosedBrace,
             ]),
         )
@@ -1065,7 +1104,7 @@ mod lexer_tests {
                 Token::StringLiteral("key".to_string()),
                 Token::DoubleQuotes,
                 Token::Column,
-                Token::Number,
+                Token::Number(1.2e-10),
                 Token::ClosedBrace,
             ]),
         )
@@ -1225,7 +1264,7 @@ mod lexer_tests {
     fn should_lex_correctly_array_with_zero() {
         run_test_case_with(
             "[0]",
-            Vec::from([Token::OpenBracket, Token::Number, Token::ClosedBracket]),
+            Vec::from([Token::OpenBracket, Token::Number(0.), Token::ClosedBracket]),
         )
     }
 
@@ -1233,7 +1272,7 @@ mod lexer_tests {
     fn should_lex_correctly_array_with_one() {
         run_test_case_with(
             "[1]",
-            Vec::from([Token::OpenBracket, Token::Number, Token::ClosedBracket]),
+            Vec::from([Token::OpenBracket, Token::Number(1.), Token::ClosedBracket]),
         )
     }
 
@@ -1243,9 +1282,9 @@ mod lexer_tests {
             "[1,2.6]",
             Vec::from([
                 Token::OpenBracket,
-                Token::Number,
+                Token::Number(1.),
                 Token::Comma,
-                Token::Number,
+                Token::Number(2.6),
                 Token::ClosedBracket,
             ]),
         )
@@ -1257,9 +1296,9 @@ mod lexer_tests {
             "[1,2.6e9]",
             Vec::from([
                 Token::OpenBracket,
-                Token::Number,
+                Token::Number(1.),
                 Token::Comma,
-                Token::Number,
+                Token::Number(2.6e9),
                 Token::ClosedBracket,
             ]),
         )
@@ -1271,9 +1310,9 @@ mod lexer_tests {
             "[1,2.6e0]",
             Vec::from([
                 Token::OpenBracket,
-                Token::Number,
+                Token::Number(1.0),
                 Token::Comma,
-                Token::Number,
+                Token::Number(2.6e0),
                 Token::ClosedBracket,
             ]),
         )

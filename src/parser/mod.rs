@@ -83,7 +83,7 @@ impl<R: BufRead> JSONParser<R> {
                 Token::StringLiteral(_) => {
                     // ignore for now
                 }
-                Token::Number | Token::BoolTrue | Token::BoolFalse | Token::Null => {}
+                Token::Number(_) | Token::BoolTrue | Token::BoolFalse | Token::Null => {}
                 Token::OpenBracket => {}
                 Token::ClosedBracket => {}
             }

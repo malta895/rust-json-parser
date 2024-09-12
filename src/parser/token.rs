@@ -11,7 +11,7 @@ pub enum Token {
     Column,
     Comma,
     StringLiteral(String),
-    Number,
+    Number(f64),
     BoolTrue,
     BoolFalse,
     Null
@@ -36,7 +36,7 @@ impl fmt::Display for Token {
             Token::DoubleQuotes => String::from(DOUBLE_QUOTES),
             Token::Column => String::from(COLUMN),
             Token::Comma => String::from(COMMA),
-            Token::Number => String::from("<number>"),
+            Token::Number(_) => String::from("<number>"),
             Token::BoolTrue | Token::BoolFalse => String::from("<boolean>"),
             Token::Null => String::from("<null>"),
             Token::StringLiteral(_) => String::from("<string literal>"),
