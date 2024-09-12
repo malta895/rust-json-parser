@@ -143,7 +143,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
                         (' ', State::Normal) => State::Normal,
                         (' ', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number)´
+                            tokens.push(Token::Number);
                             State::Normal
                         },
 
