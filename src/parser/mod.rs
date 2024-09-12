@@ -43,6 +43,7 @@ impl<R: BufRead> JSONParser<R> {
         let p = &mut Self::new(reader);
         p.lex()?;
 
+        dbg!(&p.tokens);
         p.current_line = 1;
         let mut obj_depth = 0;
         let mut is_inside_array = false;
@@ -57,22 +58,18 @@ impl<R: BufRead> JSONParser<R> {
                 }
                 Token::ClosedBrace => {
                     if obj_depth == 0 {
-                        return Err(p.build_json_err(format!("Unexpected {}", token)));
+                        return Err(p.build_json_err(format!("Unexpected {} outside obj", token)));
                     }
                     if is_after_comma {
-                        return Err(p.build_json_err(format!("Unexpected {}", token)));
+                        return Err(p.build_json_err(format!("Unexpected {} after comma", token)));
                     }
                     obj_depth -= 1;
-                    if obj_depth == 0{
+                    if obj_depth == 0 {
                         is_json_ended = true;
                     }
                 }
                 Token::NewLine => {
                     // ignore for now
-                }
-                Token::DoubleQuotes => {
-                    is_after_comma = false;
-                    is_inside_literal = !is_inside_literal;
                 }
                 Token::Column => {
                     // ignore for now
@@ -81,7 +78,7 @@ impl<R: BufRead> JSONParser<R> {
                     is_after_comma = true;
                 }
                 Token::StringLiteral(_) => {
-                    // ignore for now
+                    is_after_comma = false;
                 }
                 Token::Number(_) | Token::BoolTrue | Token::BoolFalse | Token::Null => {}
                 Token::OpenBracket => {}
@@ -114,7 +111,10 @@ mod check_valid_tests {
     #[test]
     fn should_report_error_for_closed_brace_outside_obj() {
         let found_err = JSONParser::check_valid("}".as_bytes()).unwrap_err();
-        assert_eq!("Unexpected '}': at line 1", found_err.to_string())
+        assert_eq!(
+            "Unexpected '}' outside obj: at line 1",
+            found_err.to_string()
+        )
     }
 
     #[test]

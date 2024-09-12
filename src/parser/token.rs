@@ -7,7 +7,6 @@ pub enum Token {
     OpenBracket,
     ClosedBracket,
     NewLine,
-    DoubleQuotes,
     Column,
     Comma,
     StringLiteral(String),
@@ -33,7 +32,6 @@ impl fmt::Display for Token {
             Token::OpenBrace => String::from(OPEN_BRACE),
             Token::ClosedBrace => String::from(CLOSED_BRACE),
             Token::NewLine => String::from(NEW_LINE),
-            Token::DoubleQuotes => String::from(DOUBLE_QUOTES),
             Token::Column => String::from(COLUMN),
             Token::Comma => String::from(COMMA),
             Token::Number(_) => String::from("<number>"),
@@ -42,7 +40,6 @@ impl fmt::Display for Token {
             Token::StringLiteral(_) => String::from("<string literal>"),
             Token::OpenBracket => String::from(OPEN_BRACKET),
             Token::ClosedBracket => String::from(CLOSED_BRACKET),
-            
         };
         write!(f, "'{}'", token_str)
     }

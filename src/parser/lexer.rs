@@ -77,7 +77,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         ('"', State::ValueStringLiteral) => {
                             tokens.push(Token::StringLiteral(curr_string_literal.clone()));
                             curr_string_literal.clear();
-                            tokens.push(Token::DoubleQuotes);
                             State::Normal
                         }
                         (_, State::ValueStringLiteral) => {
@@ -90,7 +89,6 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         }
 
                         ('"', State::Normal) => {
-                            tokens.push(Token::DoubleQuotes);
                             State::ValueStringLiteral
                         }
 
@@ -293,13 +291,9 @@ mod lexer_tests {
             "{\"😊\":\"\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("😊".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         );
@@ -308,11 +302,6 @@ mod lexer_tests {
     #[test]
     fn should_report_err_lex_normal_text() {
         run_expected_error_test_case_with("hello", JSONError::new(format!("Unexpected 'h'"), 1));
-    }
-
-    #[test]
-    fn should_lex_double_qoutes() {
-        run_test_case_with("\"", Vec::from([Token::DoubleQuotes]));
     }
 
     #[test]
@@ -326,13 +315,9 @@ mod lexer_tests {
             "{\"{:\":\"\"",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("{:".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
             ]),
         )
     }
@@ -343,13 +328,9 @@ mod lexer_tests {
             "{\"ab\\\"c\":\"\"",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("ab\"c".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
             ]),
         )
     }
@@ -360,13 +341,9 @@ mod lexer_tests {
             "{\"ab\\\\c\":\"\"",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("ab\\c".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
             ]),
         )
     }
@@ -385,21 +362,13 @@ mod lexer_tests {
             "{\"key\":\"val\",\"key2\":\"val\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
-                Token::DoubleQuotes,
                 Token::Comma,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
@@ -411,22 +380,14 @@ mod lexer_tests {
             "{  \"key\":\"val\",\n  \"key2\":\"val\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
-                Token::DoubleQuotes,
                 Token::Comma,
                 Token::NewLine,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
@@ -438,22 +399,14 @@ mod lexer_tests {
             "{  \"key\":\"va l\",\n  \"ke y2\":\"val\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("va l".to_string()),
-                Token::DoubleQuotes,
                 Token::Comma,
                 Token::NewLine,
-                Token::DoubleQuotes,
                 Token::StringLiteral("ke y2".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
@@ -465,9 +418,7 @@ mod lexer_tests {
             "{ \"key\": 123456789}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(123456789.),
                 Token::ClosedBrace,
@@ -481,9 +432,7 @@ mod lexer_tests {
             "{ \"key\": 123456789\n}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(123456789.),
                 Token::NewLine,
@@ -498,19 +447,13 @@ mod lexer_tests {
             "{ \"key\": 1234567890, \"key2\":\"\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1234567890.),
                 Token::Comma,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
@@ -522,9 +465,7 @@ mod lexer_tests {
             "{ \"key\": true}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::BoolTrue,
                 Token::ClosedBrace,
@@ -538,9 +479,7 @@ mod lexer_tests {
             "{ \"key\": true\n}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::BoolTrue,
                 Token::NewLine,
@@ -555,19 +494,13 @@ mod lexer_tests {
             "{ \"key\": true, \"key2\":\"\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::BoolTrue,
                 Token::Comma,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
@@ -579,9 +512,7 @@ mod lexer_tests {
             "{ \"key\": false}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::BoolFalse,
                 Token::ClosedBrace,
@@ -603,19 +534,13 @@ mod lexer_tests {
             "{ \"key\": false, \"key2\":\"\"}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::BoolFalse,
                 Token::Comma,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key2".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
             ]),
         )
@@ -635,9 +560,7 @@ mod lexer_tests {
             "{ \"key\": null}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Null,
                 Token::ClosedBrace,
@@ -651,9 +574,7 @@ mod lexer_tests {
             "{ \"key\": {}}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::OpenBrace,
                 Token::ClosedBrace,
@@ -668,9 +589,7 @@ mod lexer_tests {
             "{ \"key\": []}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::OpenBracket,
                 Token::ClosedBracket,
@@ -685,14 +604,10 @@ mod lexer_tests {
             "{ \"key\": [\"val\"]}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::OpenBracket,
-                Token::DoubleQuotes,
                 Token::StringLiteral("val".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBracket,
                 Token::ClosedBrace,
             ]),
@@ -705,18 +620,12 @@ mod lexer_tests {
             "{ \"key\": {\"inner_key\":\"inner_val\"}}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("inner_key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("inner_val".to_string()),
-                Token::DoubleQuotes,
                 Token::ClosedBrace,
                 Token::ClosedBrace,
             ]),
@@ -729,19 +638,13 @@ mod lexer_tests {
             "{ \"key\": {\n\"inner_key\":\"inner_val\"\n}\n}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::OpenBrace,
                 Token::NewLine,
-                Token::DoubleQuotes,
                 Token::StringLiteral("inner_key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
-                Token::DoubleQuotes,
                 Token::StringLiteral("inner_val".to_string()),
-                Token::DoubleQuotes,
                 Token::NewLine,
                 Token::ClosedBrace,
                 Token::NewLine,
@@ -780,9 +683,7 @@ mod lexer_tests {
             "{ \"key\": 0}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(0.),
                 Token::ClosedBrace,
@@ -796,9 +697,7 @@ mod lexer_tests {
             "{ \"key\": 1.5}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1.5),
                 Token::ClosedBrace,
@@ -812,9 +711,7 @@ mod lexer_tests {
             "{ \"key\": 0.2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(0.2),
                 Token::ClosedBrace,
@@ -876,9 +773,7 @@ mod lexer_tests {
             "{ \"key\": -0.2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(-0.2),
                 Token::ClosedBrace,
@@ -892,9 +787,7 @@ mod lexer_tests {
             "{ \"key\": -0.2 }",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(-0.2),
                 Token::ClosedBrace,
@@ -908,9 +801,7 @@ mod lexer_tests {
             "{ \"key\": 5  }",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(5.),
                 Token::ClosedBrace,
@@ -924,9 +815,7 @@ mod lexer_tests {
             "{ \"key\": 5e10  }",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(5e10),
                 Token::ClosedBrace,
@@ -940,9 +829,7 @@ mod lexer_tests {
             "{ \"key\": -1.2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(-1.2),
                 Token::ClosedBrace,
@@ -956,9 +843,7 @@ mod lexer_tests {
             "{ \"key\"  : -1.2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(-1.2),
                 Token::ClosedBrace,
@@ -972,9 +857,7 @@ mod lexer_tests {
             "{ \"key\": +1.2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1.2),
                 Token::ClosedBrace,
@@ -988,9 +871,7 @@ mod lexer_tests {
             "{ \"key\": +0}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(0.),
                 Token::ClosedBrace,
@@ -1004,9 +885,7 @@ mod lexer_tests {
             "{ \"key\": 0e0}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(0.),
                 Token::ClosedBrace,
@@ -1020,9 +899,7 @@ mod lexer_tests {
             "{ \"key\": 0E0}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(0.),
                 Token::ClosedBrace,
@@ -1036,9 +913,7 @@ mod lexer_tests {
             "{ \"key\": 1e0}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1e0),
                 Token::ClosedBrace,
@@ -1052,9 +927,7 @@ mod lexer_tests {
             "{ \"key\": 1.2e0}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1.2e0),
                 Token::ClosedBrace,
@@ -1068,9 +941,7 @@ mod lexer_tests {
             "{ \"key\": 1.2E2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1.2e2),
                 Token::ClosedBrace,
@@ -1084,9 +955,7 @@ mod lexer_tests {
             "{ \"key\": 1.2e+2}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1.2e2),
                 Token::ClosedBrace,
@@ -1100,9 +969,7 @@ mod lexer_tests {
             "{ \"key\": 1.2e-10}",
             Vec::from([
                 Token::OpenBrace,
-                Token::DoubleQuotes,
                 Token::StringLiteral("key".to_string()),
-                Token::DoubleQuotes,
                 Token::Column,
                 Token::Number(1.2e-10),
                 Token::ClosedBrace,
