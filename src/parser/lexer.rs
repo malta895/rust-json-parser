@@ -7,6 +7,7 @@ enum NumberState {
     Sign,
     Exp,
     Point,
+    ExpSign,
 
     LeadingZero,
     Integer,
@@ -139,6 +140,9 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         (' ', State::Normal) => State::Normal,
 
                         ('-' | '+', State::Normal) => State::ValueNumber(NumberState::Sign),
+                        ('-' | '+', State::ValueNumber(NumberState::Exp)) => {
+                            State::ValueNumber(NumberState::ExpSign)
+                        }
                         ('e' | 'E', State::ValueNumber(n)) if n.is_final() && !n.is_exp() => {
                             State::ValueNumber(NumberState::Exp)
                         }
@@ -148,9 +152,10 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
                             State::ValueNumber(NumberState::LeadingZero)
                         }
-                        ('1'..='9', State::ValueNumber(NumberState::Exp)) => {
-                            State::ValueNumber(NumberState::ExpInteger)
-                        }
+                        (
+                            '1'..='9',
+                            State::ValueNumber(NumberState::Exp | NumberState::ExpSign),
+                        ) => State::ValueNumber(NumberState::ExpInteger),
                         ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
                             State::ValueNumber(NumberState::Integer)
                         }
@@ -977,6 +982,54 @@ mod lexer_tests {
     }
 
     #[test]
+    fn should_lex_correctly_exponential_with_plus() {
+        run_test_case_with(
+            "{ \"key\": 1.2e+2}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_exponential_with_minus() {
+        run_test_case_with(
+            "{ \"key\": 1.2e-10}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::DoubleQuotes,
+                Token::StringLiteral("key".to_string()),
+                Token::DoubleQuotes,
+                Token::Column,
+                Token::Number,
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_exponential_decimal_exp_with_sign() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 1.2E+1.2}",
+            JSONError::new("Unexpected '.'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_lex_error_exponential_decimal_exp_leading_zero_with_sign() {
+        run_expected_error_test_case_with(
+            "{ \"key\": 1.2E-0.2}",
+            JSONError::new("Unexpected '.'".to_string(), 1),
+        )
+    }
+
+    #[test]
     fn should_lex_error_exponential_decimal_exp_leading_zero() {
         run_expected_error_test_case_with(
             "{ \"key\": 1.2E0.2}",
@@ -1122,7 +1175,13 @@ mod lexer_tests {
     fn should_lex_correctly_array_with_decimal() {
         run_test_case_with(
             "[1,2.6]",
-            Vec::from([Token::OpenBracket, Token::Number, Token::Comma, Token::Number, Token::ClosedBracket]),
+            Vec::from([
+                Token::OpenBracket,
+                Token::Number,
+                Token::Comma,
+                Token::Number,
+                Token::ClosedBracket,
+            ]),
         )
     }
 
@@ -1130,7 +1189,13 @@ mod lexer_tests {
     fn should_lex_correctly_array_with_exp() {
         run_test_case_with(
             "[1,2.6e9]",
-            Vec::from([Token::OpenBracket, Token::Number, Token::Comma, Token::Number, Token::ClosedBracket]),
+            Vec::from([
+                Token::OpenBracket,
+                Token::Number,
+                Token::Comma,
+                Token::Number,
+                Token::ClosedBracket,
+            ]),
         )
     }
 
@@ -1138,7 +1203,13 @@ mod lexer_tests {
     fn should_lex_correctly_array_with_zero_exp() {
         run_test_case_with(
             "[1,2.6e0]",
-            Vec::from([Token::OpenBracket, Token::Number, Token::Comma, Token::Number, Token::ClosedBracket]),
+            Vec::from([
+                Token::OpenBracket,
+                Token::Number,
+                Token::Comma,
+                Token::Number,
+                Token::ClosedBracket,
+            ]),
         )
     }
 }
