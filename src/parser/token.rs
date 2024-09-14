@@ -19,7 +19,6 @@ pub enum Token {
 const OPEN_BRACE: &str= "{";
 const CLOSED_BRACE: &str = "}";
 const NEW_LINE: &str = "\n"; //TODO: make sure this works on windows too
-const DOUBLE_QUOTES: &str = "\"";
 const COLUMN: &str = ":";
 const COMMA: &str = ",";
 const OPEN_BRACKET: &str = "[";

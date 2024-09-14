@@ -1,22 +1,24 @@
 use super::{error::JSONError, token::Token};
 
 struct State {
-    state: StateKind,
+    state_kind: StateKind,
 
     obj_depth: u64,
+    array_depth: u64,
 }
 
 impl State {
     pub fn new() -> State {
         State {
-            state: StateKind::Initial,
+            state_kind: StateKind::Initial,
             obj_depth: 0,
+            array_depth: 0,
         }
     }
 
     fn close_obj(&mut self) {
         self.obj_depth -= 1;
-        self.state = if self.obj_depth == 0 {
+        self.state_kind = if self.obj_depth == 0 {
             StateKind::End
         } else {
             StateKind::AfterObj
@@ -24,7 +26,7 @@ impl State {
     }
 
     fn open_obj(&mut self) {
-        self.state = StateKind::OpenObj;
+        self.state_kind = StateKind::OpenObj;
         self.obj_depth += 1;
     }
 }
@@ -34,6 +36,7 @@ enum StateKind {
     Initial,
 
     OpenObj,
+    OpenArr,
 
     Key,
     Val,
@@ -48,15 +51,17 @@ enum StateKind {
 pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
     let mut state = State::new();
     for token in &tokens {
-        match (&state.state, token) {
+        match (&state.state_kind, token) {
             (_, Token::NewLine) => {}
             (StateKind::Initial, Token::OpenBrace) => {
                 state.open_obj();
             }
             (StateKind::Initial, Token::ClosedBrace) => {
-                if state.obj_depth == 0 {
-                    return Err(JSONError::new("Unexpected '}'".to_string(), 1));
-                }
+                return Err(JSONError::new("Unexpected '}'".to_string(), 1));
+            }
+            (StateKind::Initial, Token::OpenBracket) => {
+                state.array_depth += 1;
+                state.state_kind = StateKind::OpenArr;
             }
 
             (StateKind::End, _) => {
@@ -64,9 +69,8 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (StateKind::OpenObj, Token::StringLiteral(_)) => {
-                state.state = StateKind::Key;
+                state.state_kind = StateKind::Key;
             }
-
             (StateKind::OpenObj, Token::ClosedBrace) => {
                 state.close_obj();
             }
@@ -75,11 +79,16 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.close_obj();
             }
             (StateKind::AfterObj, Token::Comma) => {
-                state.state = StateKind::AfterComma;
+                state.state_kind = StateKind::AfterComma;
+            }
+
+            (StateKind::OpenArr, Token::ClosedBracket) => {
+                state.array_depth -= 1;
+                state.state_kind = StateKind::End;
             }
 
             (StateKind::Key, Token::Column) => {
-                state.state = StateKind::Val;
+                state.state_kind = StateKind::Val;
             }
             (
                 StateKind::Val,
@@ -89,7 +98,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 | Token::Null
                 | Token::Number(_),
             ) => {
-                state.state = StateKind::AfterVal;
+                state.state_kind = StateKind::AfterVal;
             }
             (StateKind::Val, Token::OpenBrace) => {
                 state.open_obj();
@@ -99,11 +108,11 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.close_obj();
             }
             (StateKind::AfterVal, Token::Comma) => {
-                state.state = StateKind::AfterComma;
+                state.state_kind = StateKind::AfterComma;
             }
 
             (StateKind::AfterComma, Token::StringLiteral(_)) => {
-                state.state = StateKind::Key;
+                state.state_kind = StateKind::Key;
             }
 
             (_, token) => {
@@ -111,8 +120,8 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
         }
     }
-    if state.state != StateKind::End {
-        dbg!(state.state);
+    if state.state_kind != StateKind::End {
+        dbg!(state.state_kind);
         return Err(JSONError::new(format!("Unexpected EOF"), 1));
     }
     Ok(())
@@ -215,6 +224,10 @@ mod test_parser_pass {
             Token::Number(101.),
             Token::NewLine,
             Token::ClosedBrace,
+        ],
+        empty_array: vec![
+            Token::OpenBracket,
+            Token::ClosedBracket
         ],
     }
 }
