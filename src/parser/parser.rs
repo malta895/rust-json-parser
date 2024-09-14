@@ -64,12 +64,12 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 return Err(JSONError::new("Unexpected '}'".to_string(), 1));
             }
             (StateKind::Initial, Token::OpenBracket) => {
-                //state.array_depth += 1;
+                state.array_depth += 1;
                 state.state_kind = StateKind::OpenArr;
             }
 
-            (StateKind::End, _) => {
-                return Err(JSONError::new(format!("Unexpected <string literal>"), 1));
+            (StateKind::End, token) => {
+                return Err(JSONError::new(format!("Unexpected {}", token), 1));
             }
 
             (StateKind::OpenObj, Token::StringLiteral(_)) => {
@@ -87,8 +87,19 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (StateKind::OpenArr, Token::ClosedBracket) => {
-                //state.array_depth -= 1;
-                state.state_kind = StateKind::End;
+                state.array_depth -= 1;
+                if state.array_depth == 0 {
+                    state.state_kind = StateKind::End;
+                } else {
+                    state.state_kind = StateKind::ArrVal;
+                }
+            }
+            (
+                StateKind::OpenArr,
+                Token::OpenBracket
+            ) => {
+                state.array_depth += 1;
+                state.state_kind = StateKind::OpenArr;
             }
             (
                 StateKind::OpenArr,
@@ -105,7 +116,14 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.state_kind = StateKind::ObjVal;
             }
 
-            (StateKind::ArrVal, Token::ClosedBracket) => state.state_kind = StateKind::End,
+            (StateKind::ArrVal, Token::ClosedBracket)  =>{
+                state.array_depth -= 1;
+                if state.array_depth == 0 {
+                    state.state_kind = StateKind::End;
+                } else {
+                    state.state_kind = StateKind::ArrVal;
+                }
+            }
             (StateKind::ArrVal, Token::Comma) => state.state_kind = StateKind::OpenArr,
 
             (
@@ -266,6 +284,19 @@ mod test_parser_pass {
             Token::Number(1.),
             Token::ClosedBracket
         ],
+        array_with_nested_array: vec![
+            Token::OpenBracket,
+            Token::OpenBracket,
+            Token::StringLiteral("nested".to_string()),
+            Token::ClosedBracket,
+            Token::ClosedBracket
+        ],
+        array_with_nested_empty_array: vec![
+            Token::OpenBracket,
+            Token::OpenBracket,
+            Token::ClosedBracket,
+            Token::ClosedBracket
+        ],
     }
 }
 
@@ -307,7 +338,39 @@ mod test_parser_failure {
                 Token::ClosedBrace,
                 Token::StringLiteral("outsider value".to_string()),
             ],
-            JSONError::new("Unexpected <string literal>".to_string(), 1),
+            JSONError::new("Unexpected '<string literal>'".to_string(), 1),
+        ),
+        true_outside_obj: (
+            vec![
+                Token::OpenBrace,
+                Token::ClosedBrace,
+                Token::BoolTrue,
+            ],
+            JSONError::new("Unexpected '<boolean>'".to_string(), 1),
+        ),
+        false_outside_obj: (
+            vec![
+                Token::OpenBrace,
+                Token::ClosedBrace,
+                Token::BoolFalse,
+            ],
+            JSONError::new("Unexpected '<boolean>'".to_string(), 1),
+        ),
+        null_outside_obj: (
+            vec![
+                Token::OpenBrace,
+                Token::ClosedBrace,
+                Token::Null,
+            ],
+            JSONError::new("Unexpected '<null>'".to_string(), 1),
+        ),
+        number_outside_obj: (
+            vec![
+                Token::OpenBrace,
+                Token::ClosedBrace,
+                Token::Number(0.),
+            ],
+            JSONError::new("Unexpected '<number>'".to_string(), 1),
         ),
         with_closure_after_comma:(
             vec![
