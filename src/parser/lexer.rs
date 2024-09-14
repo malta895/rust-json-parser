@@ -261,6 +261,8 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
 
 #[cfg(test)]
 mod lexer_tests {
+    use core::f64;
+
     use super::*;
 
     fn run_test_case_with(input_str: &str, expected_tokens: Vec<Token>) {
@@ -1180,6 +1182,34 @@ mod lexer_tests {
                 Token::Number(1.0),
                 Token::Comma,
                 Token::Number(2.6e0),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_very_big_number_as_infinity() {
+        run_test_case_with(
+            "[1,2.6e1111]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::Number(1.0),
+                Token::Comma,
+                Token::Number(f64::INFINITY),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_very_big_negative_number_as_neg_infinity() {
+        run_test_case_with(
+            "[1,-2.6e1111]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::Number(1.0),
+                Token::Comma,
+                Token::Number(f64::NEG_INFINITY),
                 Token::ClosedBracket,
             ]),
         )
