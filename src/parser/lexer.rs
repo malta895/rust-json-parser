@@ -1,4 +1,4 @@
-use std::io::{BufRead, Read};
+use std::io::BufRead;
 
 use super::{error::JSONError, token::Token};
 
@@ -88,9 +88,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::ValueStringLiteral
                         }
 
-                        ('"', State::Normal) => {
-                            State::ValueStringLiteral
-                        }
+                        ('"', State::Normal) => State::ValueStringLiteral,
 
                         ('{', State::Normal) => {
                             tokens.push(Token::OpenBrace);

@@ -1,9 +1,8 @@
-use std::io::{BufRead, Read};
+use std::io::BufRead;
 
 mod token;
 use lexer::lex;
 use parser::parse;
-use token::Token;
 
 mod error;
 use error::JSONError;
@@ -109,8 +108,7 @@ mod check_valid_tests {
 
     #[test]
     fn should_recognize_nested_objects() {
-        let res =
-            check_valid("{ \"key\": {\n\"inner_key\":\"inner_val\"\n}\n}".as_bytes());
+        let res = check_valid("{ \"key\": {\n\"inner_key\":\"inner_val\"\n}\n}".as_bytes());
         assert_eq!(Ok(()), res)
     }
 }
