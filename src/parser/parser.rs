@@ -1,7 +1,7 @@
 use super::{error::JSONError, token::Token};
 
 pub fn parse(tokens: Vec<Token>)-> Result<(), JSONError>{
-    if tokens.len() == 1 && tokens[0] == Token::OpenBrace {
+    if tokens.is_empty() || tokens.len() == 1 && tokens[0] == Token::OpenBrace {
         return Err(JSONError::new("Unexpected EOF".to_string(), 1));
     }
     Ok(())
@@ -47,6 +47,10 @@ mod test_parser_failure {
     test_parser_fails! {
         with_only_open_brace: (
             vec![Token::OpenBrace],
+            JSONError::new("Unexpected EOF".to_string(), 1),
+        ),
+        with_no_tokens: (
+            vec![],
             JSONError::new("Unexpected EOF".to_string(), 1),
         ),
     }
