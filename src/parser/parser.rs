@@ -1,3 +1,5 @@
+use std::os::linux::raw::stat;
+
 use super::{error::JSONError, token::Token};
 
 struct State {
@@ -38,10 +40,12 @@ enum StateKind {
     OpenObj,
     OpenArr,
 
-    Key,
-    Val,
-    AfterVal,
-    AfterComma,
+    ObjKey,
+    ObjVal,
+    AfterObjVal,
+    ObjComma,
+
+    ArrVal,
 
     AfterObj,
 
@@ -60,7 +64,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 return Err(JSONError::new("Unexpected '}'".to_string(), 1));
             }
             (StateKind::Initial, Token::OpenBracket) => {
-                state.array_depth += 1;
+                //state.array_depth += 1;
                 state.state_kind = StateKind::OpenArr;
             }
 
@@ -69,7 +73,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (StateKind::OpenObj, Token::StringLiteral(_)) => {
-                state.state_kind = StateKind::Key;
+                state.state_kind = StateKind::ObjKey;
             }
             (StateKind::OpenObj, Token::ClosedBrace) => {
                 state.close_obj();
@@ -79,40 +83,54 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.close_obj();
             }
             (StateKind::AfterObj, Token::Comma) => {
-                state.state_kind = StateKind::AfterComma;
+                state.state_kind = StateKind::ObjComma;
             }
 
             (StateKind::OpenArr, Token::ClosedBracket) => {
-                state.array_depth -= 1;
+                //state.array_depth -= 1;
                 state.state_kind = StateKind::End;
             }
-
-            (StateKind::Key, Token::Column) => {
-                state.state_kind = StateKind::Val;
-            }
             (
-                StateKind::Val,
+                StateKind::OpenArr,
                 Token::StringLiteral(_)
                 | Token::BoolFalse
                 | Token::BoolTrue
                 | Token::Null
                 | Token::Number(_),
             ) => {
-                state.state_kind = StateKind::AfterVal;
+                state.state_kind = StateKind::ArrVal;
             }
-            (StateKind::Val, Token::OpenBrace) => {
+
+            (StateKind::ObjKey, Token::Column) => {
+                state.state_kind = StateKind::ObjVal;
+            }
+
+            (StateKind::ArrVal, Token::ClosedBracket) => state.state_kind = StateKind::End,
+            (StateKind::ArrVal, Token::Comma) => state.state_kind = StateKind::OpenArr,
+
+            (
+                StateKind::ObjVal,
+                Token::StringLiteral(_)
+                | Token::BoolFalse
+                | Token::BoolTrue
+                | Token::Null
+                | Token::Number(_),
+            ) => {
+                state.state_kind = StateKind::AfterObjVal;
+            }
+            (StateKind::ObjVal, Token::OpenBrace) => {
                 state.open_obj();
             }
 
-            (StateKind::AfterVal, Token::ClosedBrace) => {
+            (StateKind::AfterObjVal, Token::ClosedBrace) => {
                 state.close_obj();
             }
-            (StateKind::AfterVal, Token::Comma) => {
-                state.state_kind = StateKind::AfterComma;
+            (StateKind::AfterObjVal, Token::Comma) => {
+                state.state_kind = StateKind::ObjComma;
             }
 
-            (StateKind::AfterComma, Token::StringLiteral(_)) => {
-                state.state_kind = StateKind::Key;
+            (StateKind::ObjComma, Token::StringLiteral(_)) => {
+                state.state_kind = StateKind::ObjKey;
             }
 
             (_, token) => {
@@ -227,6 +245,25 @@ mod test_parser_pass {
         ],
         empty_array: vec![
             Token::OpenBracket,
+            Token::ClosedBracket
+        ],
+
+        array_with_one_value: vec![
+            Token::OpenBracket,
+            Token::Null,
+            Token::ClosedBracket
+        ],
+        array_with_all_possible_values: vec![
+            Token::OpenBracket,
+            Token::Null,
+            Token::Comma,
+            Token::BoolTrue,
+            Token::Comma,
+            Token::BoolFalse,
+            Token::Comma,
+            Token::StringLiteral("some value".to_string()),
+            Token::Comma,
+            Token::Number(1.),
             Token::ClosedBracket
         ],
     }
