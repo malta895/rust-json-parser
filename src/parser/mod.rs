@@ -35,7 +35,7 @@ mod check_valid_tests {
     fn should_report_error_for_closed_brace_outside_obj() {
         let found_err = check_valid("}".as_bytes()).unwrap_err();
         assert_eq!(
-            "Unexpected '}' outside obj: at line 1",
+            "Unexpected '}': at line 1",
             found_err.to_string()
         )
     }
@@ -101,7 +101,7 @@ mod check_valid_tests {
     }
 
     #[test]
-    fn should_recognize_empty_array() {
+    fn should_recognize_empty_array_as_value() {
         let res = check_valid("{  \"key\": []}".as_bytes());
         assert_eq!(Ok(()), res)
     }

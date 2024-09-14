@@ -1,5 +1,3 @@
-use std::os::linux::raw::stat;
-
 use super::{error::JSONError, token::Token};
 
 struct State {
@@ -94,10 +92,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                     state.state_kind = StateKind::ArrVal;
                 }
             }
-            (
-                StateKind::OpenArr,
-                Token::OpenBracket
-            ) => {
+            (StateKind::OpenArr, Token::OpenBracket) => {
                 state.array_depth += 1;
                 state.state_kind = StateKind::OpenArr;
             }
@@ -116,7 +111,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.state_kind = StateKind::ObjVal;
             }
 
-            (StateKind::ArrVal, Token::ClosedBracket)  =>{
+            (StateKind::ArrVal, Token::ClosedBracket) => {
                 state.array_depth -= 1;
                 if state.array_depth == 0 {
                     state.state_kind = StateKind::End;
