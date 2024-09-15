@@ -51,10 +51,6 @@ impl State {
         };
         Ok(())
     }
-
-    fn pop_val_type(&mut self) -> Option<ObjArr> {
-        self.obj_arr_stack.pop()
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,6 +74,7 @@ enum StateKind {
     ObjComma,
     
     ArrVal,
+    ArrValAfterComma,
 
     End,
 }
@@ -116,7 +113,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.open_arr();
             }
             (
-                StateKind::OpenArr,
+                StateKind::OpenArr | StateKind::ArrValAfterComma,
                 Token::StringLiteral(_)
                 | Token::BoolFalse
                 | Token::BoolTrue
@@ -136,7 +133,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::ArrVal, Token::ClosedBrace) => {
                 state.close_obj()?;
             }
-            (StateKind::ArrVal, Token::Comma) => state.state_kind = StateKind::OpenArr,
+            (StateKind::ArrVal, Token::Comma) => state.state_kind = StateKind::ArrValAfterComma,
 
             (
                 StateKind::ObjVal,
@@ -411,6 +408,15 @@ mod test_parser_failure {
                 Token::ClosedBrace
             ],
             JSONError::new("Unexpected '}'".to_string(), 1),
+        ),
+        with_extra_comma_in_array: (
+            vec![
+                Token::OpenBracket,
+                Token::StringLiteral("hello".to_string()),
+                Token::Comma,
+                Token::ClosedBracket,
+            ],
+            JSONError::new("Unexpected ']'".to_string(), 1),
         ),
     }
 }
