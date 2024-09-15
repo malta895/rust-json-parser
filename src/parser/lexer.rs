@@ -74,7 +74,9 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                 for c in s.chars() {
                     state = match (c, &state) {
                         ('\\', State::ValueStringLiteral) => State::Escaping,
-                        ('\t', State::ValueStringLiteral) => return Err(JSONError::new("Unexpected <tab>".to_string(), 1)),  
+                        ('\t', State::ValueStringLiteral) => {
+                            return Err(JSONError::new("Unexpected <tab>".to_string(), 1))
+                        }
                         ('"', State::ValueStringLiteral) => {
                             tokens.push(Token::StringLiteral(curr_string_literal.clone()));
                             curr_string_literal.clear();
@@ -85,6 +87,11 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::ValueStringLiteral
                         }
                         ('"' | '\\', State::Escaping) => {
+                            curr_string_literal.push(c);
+                            State::ValueStringLiteral
+                        }
+                        ('b' | 'f' | 'n' | 'r' | 't', State::Escaping) => {
+                            curr_string_literal.push('\\');
                             curr_string_literal.push(c);
                             State::ValueStringLiteral
                         }
@@ -1218,8 +1225,67 @@ mod lexer_tests {
     fn should_error_on_unescaped_tab() {
         run_expected_error_test_case_with(
             "[\"\t\"]",
-         JSONError::new("Unexpected <tab>".to_string(), 1)   
+            JSONError::new("Unexpected <tab>".to_string(), 1),
         )
     }
-    
+
+    #[test]
+    fn should_lex_correctly_string_with_slash_b() {
+        run_test_case_with(
+            "[\"\\b\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\b".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_string_with_slash_f() {
+        run_test_case_with(
+            "[\"\\f\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\f".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_string_with_slash_n() {
+        run_test_case_with(
+            "[\"\\n\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\n".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_string_with_slash_r() {
+        run_test_case_with(
+            "[\"\\r\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\r".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_string_with_slash_t() {
+        run_test_case_with(
+            "[\"\\t\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\t".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
 }
