@@ -76,7 +76,7 @@ enum StateKind {
     ObjVal,
     AfterObjVal,
     ObjComma,
-
+    
     ArrVal,
 
     End,
@@ -107,13 +107,6 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
             (StateKind::OpenObj, Token::ClosedBrace) => {
                 state.close_obj()?;
-            }
-
-            (StateKind::AfterObj, Token::ClosedBrace) => {
-                state.close_obj()?;
-            }
-            (StateKind::AfterObj, Token::Comma) => {
-                state.state_kind = StateKind::ObjComma;
             }
 
             (StateKind::OpenArr, Token::ClosedBracket) => {
