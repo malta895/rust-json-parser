@@ -1,34 +1,68 @@
 use super::{error::JSONError, token::Token};
 
+#[derive(Debug)]
 struct State {
     state_kind: StateKind,
-
-    obj_depth: u64,
-    array_depth: u64,
+    obj_arr_stack: Vec<ObjArr>,
 }
 
 impl State {
     pub fn new() -> State {
         State {
             state_kind: StateKind::Initial,
-            obj_depth: 0,
-            array_depth: 0,
+            obj_arr_stack: vec![],
         }
     }
 
-    fn close_obj(&mut self) {
-        self.obj_depth -= 1;
-        self.state_kind = if self.obj_depth == 0 {
-            StateKind::End
-        } else {
-            StateKind::AfterObj
+    fn close_obj(&mut self) -> Result<(), JSONError> {
+        self.state_kind = match self.obj_arr_stack.pop() {
+            Some(ObjArr::RootObj) => StateKind::End,
+            Some(ObjArr::Object) => StateKind::AfterObjVal,
+            Some(_) | None => return Err(JSONError::new("Unexpected '}'".to_string(), 1)),
         };
+        Ok(())
     }
 
     fn open_obj(&mut self) {
         self.state_kind = StateKind::OpenObj;
-        self.obj_depth += 1;
+        self.obj_arr_stack
+            .push(if let Some(_) = self.obj_arr_stack.last() {
+                ObjArr::Object
+            } else {
+                ObjArr::RootObj
+            })
     }
+
+    fn open_arr(&mut self) {
+        self.state_kind = StateKind::OpenArr;
+        self.obj_arr_stack
+            .push(if let Some(_) = self.obj_arr_stack.last() {
+                ObjArr::Array
+            } else {
+                ObjArr::RootArr
+            })
+    }
+
+    fn close_arr(&mut self) -> Result<(), JSONError> {
+        self.state_kind = match self.obj_arr_stack.pop() {
+            Some(ObjArr::RootArr) => StateKind::End,
+            Some(ObjArr::Array) => StateKind::ArrVal,
+            Some(_) | None => return Err(JSONError::new("Unexpected ']'".to_string(), 1)),
+        };
+        Ok(())
+    }
+
+    fn pop_val_type(&mut self) -> Option<ObjArr> {
+        self.obj_arr_stack.pop()
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum ObjArr {
+    RootArr,
+    RootObj,
+    Object,
+    Array,
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,8 +79,6 @@ enum StateKind {
 
     ArrVal,
 
-    AfterObj,
-
     End,
 }
 
@@ -62,11 +94,11 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 return Err(JSONError::new("Unexpected '}'".to_string(), 1));
             }
             (StateKind::Initial, Token::OpenBracket) => {
-                state.array_depth += 1;
-                state.state_kind = StateKind::OpenArr;
+                state.open_arr();
             }
 
             (StateKind::End, token) => {
+                dbg!("state end with token", token);
                 return Err(JSONError::new(format!("Unexpected {}", token), 1));
             }
 
@@ -74,27 +106,21 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.state_kind = StateKind::ObjKey;
             }
             (StateKind::OpenObj, Token::ClosedBrace) => {
-                state.close_obj();
+                state.close_obj()?;
             }
 
             (StateKind::AfterObj, Token::ClosedBrace) => {
-                state.close_obj();
+                state.close_obj()?;
             }
             (StateKind::AfterObj, Token::Comma) => {
                 state.state_kind = StateKind::ObjComma;
             }
 
             (StateKind::OpenArr, Token::ClosedBracket) => {
-                state.array_depth -= 1;
-                if state.array_depth == 0 {
-                    state.state_kind = StateKind::End;
-                } else {
-                    state.state_kind = StateKind::ArrVal;
-                }
+                state.close_arr()?;
             }
             (StateKind::OpenArr, Token::OpenBracket) => {
-                state.array_depth += 1;
-                state.state_kind = StateKind::OpenArr;
+                state.open_arr();
             }
             (
                 StateKind::OpenArr,
@@ -112,12 +138,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (StateKind::ArrVal, Token::ClosedBracket) => {
-                state.array_depth -= 1;
-                if state.array_depth == 0 {
-                    state.state_kind = StateKind::End;
-                } else {
-                    state.state_kind = StateKind::ArrVal;
-                }
+                state.close_arr()?;
+            }
+            (StateKind::ArrVal, Token::ClosedBrace) => {
+                state.close_obj()?;
             }
             (StateKind::ArrVal, Token::Comma) => state.state_kind = StateKind::OpenArr,
 
@@ -134,9 +158,12 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::ObjVal, Token::OpenBrace) => {
                 state.open_obj();
             }
+            (StateKind::ObjVal, Token::OpenBracket) => {
+                state.open_arr();
+            }
 
             (StateKind::AfterObjVal, Token::ClosedBrace) => {
-                state.close_obj();
+                state.close_obj()?;
             }
             (StateKind::AfterObjVal, Token::Comma) => {
                 state.state_kind = StateKind::ObjComma;
@@ -147,6 +174,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (_, token) => {
+                dbg!("unexpected kind", state, token);
                 return Err(JSONError::new(format!("Unexpected {}", token), 1));
             }
         }
@@ -292,6 +320,14 @@ mod test_parser_pass {
             Token::ClosedBracket,
             Token::ClosedBracket
         ],
+        empty_array_as_obj_value: vec![
+            Token::OpenBrace,
+            Token::StringLiteral("key".to_string()),
+            Token::Column,
+            Token::OpenBracket,
+            Token::ClosedBracket,
+            Token::ClosedBrace,
+        ],
     }
 }
 
@@ -367,7 +403,7 @@ mod test_parser_failure {
             ],
             JSONError::new("Unexpected '<number>'".to_string(), 1),
         ),
-        with_closure_after_comma:(
+        with_closure_after_comma: (
             vec![
                 Token::OpenBrace,
                 Token::StringLiteral("key".to_string()),
