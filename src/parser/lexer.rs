@@ -49,6 +49,7 @@ enum State {
 
     ValueStringLiteral,
     Escaping,
+    Hex(u16),
 }
 
 fn parse_string_number_to_float(number_string: String) -> Result<f64, JSONError> {
@@ -90,10 +91,25 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             curr_string_literal.push(c);
                             State::ValueStringLiteral
                         }
-                        ('b' | 'f' | 'n' | 'r' | 't', State::Escaping) => {
+                        ('b' | 'f' | 'n' | 'r' | 't' | '/', State::Escaping) => {
                             curr_string_literal.push('\\');
                             curr_string_literal.push(c);
                             State::ValueStringLiteral
+                        }
+                        ('u', State::Escaping) => {
+                            curr_string_literal.push('\\');
+                            curr_string_literal.push('u');
+                            State::Hex(0)
+                        }
+                        ('0'..='9' | 'A'..='F' | 'a'..='f', State::Hex(hex_idx))
+                            if *hex_idx < 4 =>
+                        {
+                            curr_string_literal.push(c);
+                            if *hex_idx == 3 {
+                                State::ValueStringLiteral
+                            } else {
+                                State::Hex(hex_idx + 1)
+                            }
                         }
 
                         ('"', State::Normal) => State::ValueStringLiteral,
@@ -1230,7 +1246,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_lex_correctly_string_with_slash_b() {
+    fn should_lex_correctly_string_with_escape_b() {
         run_test_case_with(
             "[\"\\b\"]",
             Vec::from([
@@ -1242,7 +1258,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_lex_correctly_string_with_slash_f() {
+    fn should_lex_correctly_string_with_escape_f() {
         run_test_case_with(
             "[\"\\f\"]",
             Vec::from([
@@ -1254,7 +1270,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_lex_correctly_string_with_slash_n() {
+    fn should_lex_correctly_string_with_escape_n() {
         run_test_case_with(
             "[\"\\n\"]",
             Vec::from([
@@ -1266,7 +1282,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_lex_correctly_string_with_slash_r() {
+    fn should_lex_correctly_string_with_escape_r() {
         run_test_case_with(
             "[\"\\r\"]",
             Vec::from([
@@ -1278,7 +1294,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn should_lex_correctly_string_with_slash_t() {
+    fn should_lex_correctly_string_with_escape_t() {
         run_test_case_with(
             "[\"\\t\"]",
             Vec::from([
@@ -1286,6 +1302,58 @@ mod lexer_tests {
                 Token::StringLiteral("\\t".to_string()),
                 Token::ClosedBracket,
             ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_correctly_string_with_escape_slash() {
+        run_test_case_with(
+            "[\"\\/\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\/".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_hex() {
+        run_test_case_with(
+            "[\"\\u0123\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\u0123".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_lex_hex_letters() {
+        run_test_case_with(
+            "[\"\\u12aB\"]",
+            Vec::from([
+                Token::OpenBracket,
+                Token::StringLiteral("\\u12aB".to_string()),
+                Token::ClosedBracket,
+            ]),
+        )
+    }
+
+    #[test]
+    fn should_error_on_invalid_hex() {
+        run_expected_error_test_case_with(
+            "[\"\\u123z\"]",
+            JSONError::new("Unexpected 'z'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_error_on_invalid_hex_capital() {
+        run_expected_error_test_case_with(
+            "[\"\\u123Z\"]",
+            JSONError::new("Unexpected 'Z'".to_string(), 1),
         )
     }
 }
