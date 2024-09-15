@@ -12,7 +12,6 @@ enum NumberState {
     LeadingZero,
     Integer,
     Decimal,
-    ExpLeadingZero,
     ExpInteger,
 }
 
@@ -22,18 +21,17 @@ impl NumberState {
             Self::LeadingZero
             | Self::Integer
             | Self::Decimal
-            | Self::ExpLeadingZero
             | Self::ExpInteger => true,
             _ => false,
         }
     }
 
     pub fn is_exp(self) -> bool {
-        self == Self::ExpLeadingZero || self == Self::ExpInteger
+        self == Self::ExpInteger
     }
 
     pub fn is_leading_zero(self) -> bool {
-        self == Self::LeadingZero || self == Self::ExpLeadingZero
+        self == Self::LeadingZero
     }
 }
 
@@ -206,16 +204,12 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             curr_number_string.push('e');
                             State::ValueNumber(NumberState::Exp)
                         }
-                        ('0', State::ValueNumber(NumberState::Exp | NumberState::ExpSign)) => {
-                            curr_number_string.push('0');
-                            State::ValueNumber(NumberState::ExpLeadingZero)
-                        }
                         ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
                             curr_number_string.push('0');
                             State::ValueNumber(NumberState::LeadingZero)
                         }
                         (
-                            '1'..='9',
+                            '0'..='9',
                             State::ValueNumber(NumberState::Exp | NumberState::ExpSign),
                         ) => {
                             curr_number_string.push(c);
@@ -946,6 +940,20 @@ mod lexer_tests {
     }
 
     #[test]
+    fn should_lex_correctly_several_zeros_after_exp() {
+        run_test_case_with(
+            "{ \"key\": 1e000}",
+            Vec::from([
+                Token::OpenBrace,
+                Token::StringLiteral("key".to_string()),
+                Token::Column,
+                Token::Number(1e0),
+                Token::ClosedBrace,
+            ]),
+        )
+    }
+
+    #[test]
     fn should_lex_correctly_exponential_e_after_decimal() {
         run_test_case_with(
             "{ \"key\": 1.2e0}",
@@ -1014,14 +1022,6 @@ mod lexer_tests {
         run_expected_error_test_case_with(
             "{ \"key\": 1.2E-0.2}",
             JSONError::new("Unexpected '.'".to_string(), 1),
-        )
-    }
-
-    #[test]
-    fn should_lex_error_exponential_decimal_exp_leading_zero_double_zero() {
-        run_expected_error_test_case_with(
-            "{ \"key\": 1.2E-00}",
-            JSONError::new("Unexpected '0'".to_string(), 1),
         )
     }
 
