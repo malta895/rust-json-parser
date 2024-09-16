@@ -263,6 +263,9 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
                     }
                 }
+                if state != State::Normal {
+                    return Err(JSONError::new(format!("Unexpected EOF"), 1));
+                }
 
                 buf = s.into_bytes();
                 buf.clear();
@@ -1354,6 +1357,30 @@ mod lexer_tests {
         run_expected_error_test_case_with(
             "[\"\\u123Z\"]",
             JSONError::new("Unexpected 'Z'".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_error_on_interrupted_string() {
+        run_expected_error_test_case_with(
+            "[\"hell",
+            JSONError::new("Unexpected EOF".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_error_on_interrupted_true() {
+        run_expected_error_test_case_with(
+            "[tru",
+            JSONError::new("Unexpected EOF".to_string(), 1),
+        )
+    }
+
+    #[test]
+    fn should_error_on_interrupted_false() {
+        run_expected_error_test_case_with(
+            "[f",
+            JSONError::new("Unexpected EOF".to_string(), 1),
         )
     }
 }
