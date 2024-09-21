@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::{io::BufRead, str};
 
 use super::{error::JSONError, token::Token};
 
@@ -15,13 +15,12 @@ enum NumberState {
     ExpInteger,
 }
 
+const HEX_LEN: u16 = 4;
+
 impl NumberState {
     pub fn is_final(self) -> bool {
         match self {
-            Self::LeadingZero
-            | Self::Integer
-            | Self::Decimal
-            | Self::ExpInteger => true,
+            Self::LeadingZero | Self::Integer | Self::Decimal | Self::ExpInteger => true,
             _ => false,
         }
     }
@@ -56,236 +55,242 @@ fn parse_string_number_to_float(number_string: String) -> Result<f64, JSONError>
         .map_err(|e| JSONError::new(format!("Unexpected error: {}", e), 1))
 }
 
-pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
+pub fn lex<R: BufRead>(reader: R) -> Result<Vec<Token>, JSONError> {
+    // TODO: add a bool param that allows not to store literals in tokens, useful when just checking json validity
+
+    let mut buf_reader = reader;
+
     let mut tokens = Vec::new();
+    let mut curr_number_string = String::new();
+    let mut curr_string_literal = String::new();
+    let mut state = State::Normal;
 
     loop {
-        let mut buf = Vec::<u8>::new();
-        match reader.read_until(b'\n', &mut buf) {
-            Ok(0) => {
-                return Ok(tokens);
+        let available = buf_reader
+            .fill_buf()
+            .map_err(|e| JSONError::new(e.to_string(), 1))?;
+        if available.is_empty() {
+            if state != State::Normal {
+                return Err(JSONError::new(format!("Unexpected EOF"), 1));
             }
-            Ok(_) => {
-                let s = String::from_utf8(buf).expect("from_utf8 failed");
-                let mut curr_string_literal = String::new();
-                let mut curr_number_string = String::new();
-                let mut state = State::Normal;
-                for c in s.chars() {
-                    state = match (c, &state) {
-                        ('\\', State::ValueStringLiteral) => State::Escaping,
-                        ('\t', State::ValueStringLiteral) => {
-                            return Err(JSONError::new("Unexpected <tab>".to_string(), 1))
-                        }
-                        ('"', State::ValueStringLiteral) => {
-                            tokens.push(Token::StringLiteral(curr_string_literal.clone()));
-                            curr_string_literal.clear();
-                            State::Normal
-                        }
-                        (_, State::ValueStringLiteral) => {
-                            curr_string_literal.push(c);
-                            State::ValueStringLiteral
-                        }
-                        ('"' | '\\', State::Escaping) => {
-                            curr_string_literal.push(c);
-                            State::ValueStringLiteral
-                        }
-                        ('b' | 'f' | 'n' | 'r' | 't' | '/', State::Escaping) => {
-                            curr_string_literal.push('\\');
-                            curr_string_literal.push(c);
-                            State::ValueStringLiteral
-                        }
-                        ('u', State::Escaping) => {
-                            curr_string_literal.push('\\');
-                            curr_string_literal.push('u');
-                            State::Hex(0)
-                        }
-                        ('0'..='9' | 'A'..='F' | 'a'..='f', State::Hex(hex_idx))
-                            if *hex_idx < 4 =>
-                        {
-                            curr_string_literal.push(c);
-                            if *hex_idx == 3 {
-                                State::ValueStringLiteral
-                            } else {
-                                State::Hex(hex_idx + 1)
-                            }
-                        }
+            break;
+        }
 
-                        ('"', State::Normal) => State::ValueStringLiteral,
+        let valid_up_to = match str::from_utf8(&available) {
+            Ok(s) => s.len(),
+            Err(e) => e.valid_up_to(),
+        };
+        if valid_up_to == 0 {
+            return Err(JSONError::new("Unexpected invalid UTF-8 sequence".to_string(), 1));
+        }
 
-                        ('{', State::Normal) => {
-                            tokens.push(Token::OpenBrace);
-                            State::Normal
-                        }
-
-                        ('}', State::Normal) => {
-                            tokens.push(Token::ClosedBrace);
-                            State::Normal
-                        }
-                        ('}', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number(parse_string_number_to_float(
-                                curr_number_string.clone(),
-                            )?));
-                            curr_number_string.clear();
-                            tokens.push(Token::ClosedBrace);
-                            State::Normal
-                        }
-
-                        ('[', State::Normal) => {
-                            tokens.push(Token::OpenBracket);
-                            state
-                        }
-                        (']', State::Normal) => {
-                            tokens.push(Token::ClosedBracket);
-                            State::Normal
-                        }
-                        (']', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number(parse_string_number_to_float(
-                                curr_number_string.clone(),
-                            )?));
-                            curr_number_string.clear();
-
-                            tokens.push(Token::ClosedBracket);
-                            State::Normal
-                        }
-
-                        ('\n', State::Normal) => {
-                            tokens.push(Token::NewLine);
-                            State::Normal
-                        }
-                        ('\n', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number(parse_string_number_to_float(
-                                curr_number_string.clone(),
-                            )?));
-                            curr_number_string.clear();
-                            tokens.push(Token::NewLine);
-                            State::Normal
-                        }
-
-                        (':', State::Normal) => {
-                            tokens.push(Token::Column);
-                            State::Normal
-                        }
-
-                        (',', State::Normal) => {
-                            tokens.push(Token::Comma);
-                            State::Normal
-                        }
-                        (',', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number(parse_string_number_to_float(
-                                curr_number_string.clone(),
-                            )?));
-                            curr_number_string.clear();
-                            tokens.push(Token::Comma);
-                            State::Normal
-                        }
-
-                        (' ', State::Normal) => State::Normal,
-                        (' ', State::ValueNumber(n)) if n.is_final() => {
-                            tokens.push(Token::Number(parse_string_number_to_float(
-                                curr_number_string.clone(),
-                            )?));
-                            curr_number_string.clear();
-                            State::Normal
-                        }
-
-                        ('-' | '+', State::Normal) => {
-                            if c == '-' {
-                                curr_number_string.push(c);
-                            }
-                            State::ValueNumber(NumberState::Sign)
-                        }
-                        ('-' | '+', State::ValueNumber(NumberState::Exp)) => {
-                            if c == '-' {
-                                curr_number_string.push(c);
-                            }
-                            State::ValueNumber(NumberState::ExpSign)
-                        }
-                        ('e' | 'E', State::ValueNumber(n)) if n.is_final() && !n.is_exp() => {
-                            curr_number_string.push('e');
-                            State::ValueNumber(NumberState::Exp)
-                        }
-                        ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
-                            curr_number_string.push('0');
-                            State::ValueNumber(NumberState::LeadingZero)
-                        }
-                        (
-                            '0'..='9',
-                            State::ValueNumber(NumberState::Exp | NumberState::ExpSign),
-                        ) => {
-                            curr_number_string.push(c);
-                            State::ValueNumber(NumberState::ExpInteger)
-                        }
-                        ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
-                            curr_number_string.push(c);
-                            State::ValueNumber(NumberState::Integer)
-                        }
-                        ('0'..='9', State::ValueNumber(NumberState::Point)) => {
-                            curr_number_string.push(c);
-                            State::ValueNumber(NumberState::Decimal)
-                        }
-                        ('0'..='9', State::ValueNumber(n_type)) if !n_type.is_leading_zero() => {
-                            curr_number_string.push(c);
-                            State::ValueNumber(*n_type)
-                        }
-                        (
-                            '.',
-                            State::ValueNumber(NumberState::Integer | NumberState::LeadingZero),
-                        ) => {
-                            curr_number_string.push('.');
-                            State::ValueNumber(NumberState::Point)
-                        }
-
-                        ('t', State::Normal) => State::ValueTrue('t'),
-                        ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
-                        ('u', State::ValueTrue('r')) => State::ValueTrue('u'),
-                        ('e', State::ValueTrue('u')) => {
-                            tokens.push(Token::BoolTrue);
-                            State::Normal
-                        }
-
-                        ('f', State::Normal) => State::ValueFalse('f'),
-                        ('a', State::ValueFalse('f')) => State::ValueFalse('a'),
-                        ('l', State::ValueFalse('a')) => State::ValueFalse('l'),
-                        ('s', State::ValueFalse('l')) => State::ValueFalse('s'),
-                        ('e', State::ValueFalse('s')) => {
-                            tokens.push(Token::BoolFalse);
-                            State::Normal
-                        }
-
-                        ('n', State::Normal) => State::ValueNull('n'),
-                        ('u', State::ValueNull('n')) => State::ValueNull('u'),
-                        ('l', State::ValueNull('u')) => State::ValueNull('l'),
-                        ('l', State::ValueNull('l')) => {
-                            tokens.push(Token::Null);
-                            State::Normal
-                        }
-
-                        (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
+        // Process valid UTF-8 chars
+        let valid_str = &available[..valid_up_to];
+        if let Ok(valid_str) = str::from_utf8(valid_str) {
+            for c in valid_str.chars() {
+                state = match (c, &state) {
+                    ('\\', State::ValueStringLiteral) => State::Escaping,
+                    ('\t', State::ValueStringLiteral) => {
+                        return Err(JSONError::new("Unexpected <tab>".to_string(), 1))
                     }
-                }
-                if state != State::Normal {
-                    return Err(JSONError::new(format!("Unexpected EOF"), 1));
-                }
+                    ('"', State::ValueStringLiteral) => {
+                        tokens.push(Token::StringLiteral(curr_string_literal.clone()));
+                        curr_string_literal.clear();
+                        State::Normal
+                    }
+                    (_, State::ValueStringLiteral) => {
+                        curr_string_literal.push(c);
+                        State::ValueStringLiteral
+                    }
+                    ('"' | '\\', State::Escaping) => {
+                        curr_string_literal.push(c);
+                        State::ValueStringLiteral
+                    }
+                    ('b' | 'f' | 'n' | 'r' | 't' | '/', State::Escaping) => {
+                        curr_string_literal.push('\\');
+                        curr_string_literal.push(c);
+                        State::ValueStringLiteral
+                    }
+                    ('u', State::Escaping) => {
+                        curr_string_literal.push('\\');
+                        curr_string_literal.push('u');
+                        State::Hex(0)
+                    }
+                    ('0'..='9' | 'A'..='F' | 'a'..='f', State::Hex(hex_idx))
+                        if *hex_idx < HEX_LEN =>
+                    {
+                        curr_string_literal.push(c);
+                        if *hex_idx == HEX_LEN - 1 {
+                            State::ValueStringLiteral
+                        } else {
+                            State::Hex(hex_idx + 1)
+                        }
+                    }
 
-                buf = s.into_bytes();
-                buf.clear();
-            }
-            Err(err) => {
-                // TODO: implement line count
-                return Err(JSONError::new(err.to_string(), 1));
+                    ('"', State::Normal) => State::ValueStringLiteral,
+
+                    ('{', State::Normal) => {
+                        tokens.push(Token::OpenBrace);
+                        State::Normal
+                    }
+
+                    ('}', State::Normal) => {
+                        tokens.push(Token::ClosedBrace);
+                        State::Normal
+                    }
+                    ('}', State::ValueNumber(n)) if n.is_final() => {
+                        tokens.push(Token::Number(parse_string_number_to_float(
+                            curr_number_string.clone(),
+                        )?));
+                        curr_number_string.clear();
+                        tokens.push(Token::ClosedBrace);
+                        State::Normal
+                    }
+
+                    ('[', State::Normal) => {
+                        tokens.push(Token::OpenBracket);
+                        state
+                    }
+                    (']', State::Normal) => {
+                        tokens.push(Token::ClosedBracket);
+                        State::Normal
+                    }
+                    (']', State::ValueNumber(n)) if n.is_final() => {
+                        tokens.push(Token::Number(parse_string_number_to_float(
+                            curr_number_string.clone(),
+                        )?));
+                        curr_number_string.clear();
+
+                        tokens.push(Token::ClosedBracket);
+                        State::Normal
+                    }
+
+                    ('\n', State::Normal) => {
+                        tokens.push(Token::NewLine);
+                        State::Normal
+                    }
+                    ('\n', State::ValueNumber(n)) if n.is_final() => {
+                        tokens.push(Token::Number(parse_string_number_to_float(
+                            curr_number_string.clone(),
+                        )?));
+                        curr_number_string.clear();
+                        tokens.push(Token::NewLine);
+                        State::Normal
+                    }
+
+                    (':', State::Normal) => {
+                        tokens.push(Token::Column);
+                        State::Normal
+                    }
+
+                    (',', State::Normal) => {
+                        tokens.push(Token::Comma);
+                        State::Normal
+                    }
+                    (',', State::ValueNumber(n)) if n.is_final() => {
+                        tokens.push(Token::Number(parse_string_number_to_float(
+                            curr_number_string.clone(),
+                        )?));
+                        curr_number_string.clear();
+                        tokens.push(Token::Comma);
+                        State::Normal
+                    }
+
+                    (' ', State::Normal) => State::Normal,
+                    (' ', State::ValueNumber(n)) if n.is_final() => {
+                        tokens.push(Token::Number(parse_string_number_to_float(
+                            curr_number_string.clone(),
+                        )?));
+                        curr_number_string.clear();
+                        State::Normal
+                    }
+
+                    ('-' | '+', State::Normal) => {
+                        if c == '-' {
+                            curr_number_string.push(c);
+                        }
+                        State::ValueNumber(NumberState::Sign)
+                    }
+                    ('-' | '+', State::ValueNumber(NumberState::Exp)) => {
+                        if c == '-' {
+                            curr_number_string.push(c);
+                        }
+                        State::ValueNumber(NumberState::ExpSign)
+                    }
+                    ('e' | 'E', State::ValueNumber(n)) if n.is_final() && !n.is_exp() => {
+                        curr_number_string.push('e');
+                        State::ValueNumber(NumberState::Exp)
+                    }
+                    ('0', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                        curr_number_string.push('0');
+                        State::ValueNumber(NumberState::LeadingZero)
+                    }
+                    ('0'..='9', State::ValueNumber(NumberState::Exp | NumberState::ExpSign)) => {
+                        curr_number_string.push(c);
+                        State::ValueNumber(NumberState::ExpInteger)
+                    }
+                    ('1'..='9', State::Normal | State::ValueNumber(NumberState::Sign)) => {
+                        curr_number_string.push(c);
+                        State::ValueNumber(NumberState::Integer)
+                    }
+                    ('0'..='9', State::ValueNumber(NumberState::Point)) => {
+                        curr_number_string.push(c);
+                        State::ValueNumber(NumberState::Decimal)
+                    }
+                    ('0'..='9', State::ValueNumber(n_type)) if !n_type.is_leading_zero() => {
+                        curr_number_string.push(c);
+                        State::ValueNumber(*n_type)
+                    }
+                    ('.', State::ValueNumber(NumberState::Integer | NumberState::LeadingZero)) => {
+                        curr_number_string.push('.');
+                        State::ValueNumber(NumberState::Point)
+                    }
+
+                    ('t', State::Normal) => State::ValueTrue('t'),
+                    ('r', State::ValueTrue('t')) => State::ValueTrue('r'),
+                    ('u', State::ValueTrue('r')) => State::ValueTrue('u'),
+                    ('e', State::ValueTrue('u')) => {
+                        tokens.push(Token::BoolTrue);
+                        State::Normal
+                    }
+
+                    ('f', State::Normal) => State::ValueFalse('f'),
+                    ('a', State::ValueFalse('f')) => State::ValueFalse('a'),
+                    ('l', State::ValueFalse('a')) => State::ValueFalse('l'),
+                    ('s', State::ValueFalse('l')) => State::ValueFalse('s'),
+                    ('e', State::ValueFalse('s')) => {
+                        tokens.push(Token::BoolFalse);
+                        State::Normal
+                    }
+
+                    ('n', State::Normal) => State::ValueNull('n'),
+                    ('u', State::ValueNull('n')) => State::ValueNull('u'),
+                    ('l', State::ValueNull('u')) => State::ValueNull('l'),
+                    ('l', State::ValueNull('l')) => {
+                        tokens.push(Token::Null);
+                        State::Normal
+                    }
+
+                    (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), 1)),
+                }
             }
         }
+
+        buf_reader.consume(valid_up_to);
     }
+    Ok(tokens)
 }
 
 #[cfg(test)]
 mod lexer_tests {
     use core::f64;
+    use std::io::BufReader;
 
     use super::*;
 
     fn run_test_case_with(input_str: &str, expected_tokens: Vec<Token>) {
-        let reader = input_str.as_bytes();
+        
+        let reader = BufReader::with_capacity(4, input_str.as_bytes());
         let found_tokens = lex(reader).unwrap();
         assert_eq!(found_tokens, expected_tokens);
     }
@@ -370,7 +375,7 @@ mod lexer_tests {
     }
 
     #[test]
-    fn shuold_not_allow_escaping_unallowed_chars() {
+    fn should_not_allow_escaping_unallowed_chars() {
         run_expected_error_test_case_with(
             "{\"ab\\c\":\"\"",
             JSONError::new(format!("Unexpected 'c'"), 1),
@@ -1370,17 +1375,19 @@ mod lexer_tests {
 
     #[test]
     fn should_error_on_interrupted_true() {
-        run_expected_error_test_case_with(
-            "[tru",
-            JSONError::new("Unexpected EOF".to_string(), 1),
-        )
+        run_expected_error_test_case_with("[tru", JSONError::new("Unexpected EOF".to_string(), 1))
     }
 
     #[test]
     fn should_error_on_interrupted_false() {
+        run_expected_error_test_case_with("[f", JSONError::new("Unexpected EOF".to_string(), 1))
+    }
+
+    #[test]
+    fn should_error_on_new_line_between_string_literal() {
         run_expected_error_test_case_with(
-            "[f",
-            JSONError::new("Unexpected EOF".to_string(), 1),
+            "[\"hel\nlo\"]",
+            JSONError::new("Unexpected '\n'".to_string(), 1),
         )
     }
 }
