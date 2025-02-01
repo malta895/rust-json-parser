@@ -82,6 +82,7 @@ enum StateKind {
 pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
     let mut state = State::new();
     for token in &tokens {
+        dbg!("processing:", token, &state);
         match (&state.state_kind, token) {
             (_, Token::NewLine) => {}
             (StateKind::Initial, Token::OpenBrace) => {
@@ -130,6 +131,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::ArrVal, Token::ClosedBracket) => {
                 state.close_arr()?;
             }
+            (StateKind::ArrValAfterComma, Token::OpenBrace) => {
+                state.open_obj();
+            }
             (StateKind::ArrVal, Token::ClosedBrace) => {
                 state.close_obj()?;
             }
@@ -154,6 +158,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
 
             (StateKind::AfterObjVal, Token::ClosedBrace) => {
                 state.close_obj()?;
+            }
+            (StateKind::AfterObjVal, Token::ClosedBracket) => {
+                state.close_arr()?;
             }
             (StateKind::AfterObjVal, Token::Comma) => {
                 state.state_kind = StateKind::ObjComma;
@@ -317,6 +324,14 @@ mod test_parser_pass {
             Token::OpenBracket,
             Token::ClosedBracket,
             Token::ClosedBrace,
+        ],
+        array_with_string_and_object: vec![
+            Token::OpenBracket,
+            Token::StringLiteral("some string".to_string()),
+            Token::Comma,
+            Token::OpenBrace,
+            Token::ClosedBrace,
+            Token::ClosedBracket,
         ],
     }
 }
