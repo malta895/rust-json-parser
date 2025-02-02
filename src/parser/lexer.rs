@@ -75,7 +75,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                     state = match (c, &state) {
                         ('\\', State::ValueStringLiteral) => State::Escaping,
                         ('\t', State::ValueStringLiteral) => {
-                            return Err(JSONError::new("Unexpected <tab>".to_string(), 1))
+                            return Err(JSONError::new("Unexpected <tab>".to_string(), curr_line))
                         }
                         ('"', State::ValueStringLiteral) => {
                             tokens.push(Token::StringLiteral(curr_string_literal.clone()));
@@ -1404,5 +1404,15 @@ mod lexer_tests {
             f",
             JSONError::new("Unexpected EOF".to_string(), 4),
         )
-    }   
+    }
+
+    #[test]
+    fn should_report_correct_error_line_new_line_tab_in_literal() {
+        run_expected_error_test_case_with(
+            "[
+            \"string with tab\t
+            ",
+            JSONError::new("Unexpected <tab>".to_string(), 2),
+        )
+    }       
 }
