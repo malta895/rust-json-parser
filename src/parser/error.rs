@@ -3,7 +3,7 @@ use core::fmt;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct JSONError {
     message: String,
-    line: i64,
+    line: u64,
 }
 
 impl fmt::Display for JSONError {
@@ -13,7 +13,7 @@ impl fmt::Display for JSONError {
 }
 
 impl JSONError {
-    pub fn new(message: String, line: i64) -> JSONError {
+    pub fn new(message: String, line: u64) -> JSONError {
         JSONError { message, line }
     }
 }
