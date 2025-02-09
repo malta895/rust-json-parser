@@ -18,10 +18,7 @@ enum NumberState {
 impl NumberState {
     pub fn is_final(self) -> bool {
         match self {
-            Self::LeadingZero
-            | Self::Integer
-            | Self::Decimal
-            | Self::ExpInteger => true,
+            Self::LeadingZero | Self::Integer | Self::Decimal | Self::ExpInteger => true,
             _ => false,
         }
     }
@@ -150,7 +147,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                         }
 
                         ('\n', State::Normal) => {
-                            curr_line+=1;    
+                            curr_line += 1;
                             tokens.push(Token::NewLine);
                             State::Normal
                         }
@@ -158,7 +155,7 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             tokens.push(Token::Number(parse_string_number_to_float(
                                 curr_number_string.clone(),
                             )?));
-                            curr_line+=1;
+                            curr_line += 1;
                             curr_number_string.clear();
                             tokens.push(Token::NewLine);
                             State::Normal
@@ -263,7 +260,9 @@ pub fn lex<R: BufRead>(mut reader: R) -> Result<Vec<Token>, JSONError> {
                             State::Normal
                         }
 
-                        (_, _) => return Err(JSONError::new(format!("Unexpected '{}'", c), curr_line)),
+                        (_, _) => {
+                            return Err(JSONError::new(format!("Unexpected '{}'", c), curr_line))
+                        }
                     }
                 }
                 if state != State::Normal {
@@ -1372,18 +1371,12 @@ mod lexer_tests {
 
     #[test]
     fn should_error_on_interrupted_true() {
-        run_expected_error_test_case_with(
-            "[tru",
-            JSONError::new("Unexpected EOF".to_string(), 1),
-        )
+        run_expected_error_test_case_with("[tru", JSONError::new("Unexpected EOF".to_string(), 1))
     }
 
     #[test]
     fn should_error_on_interrupted_false() {
-        run_expected_error_test_case_with(
-            "[f",
-            JSONError::new("Unexpected EOF".to_string(), 1),
-        )
+        run_expected_error_test_case_with("[f", JSONError::new("Unexpected EOF".to_string(), 1))
     }
 
     #[test]
@@ -1393,7 +1386,7 @@ mod lexer_tests {
             f",
             JSONError::new("Unexpected EOF".to_string(), 2),
         )
-    }   
+    }
 
     #[test]
     fn should_report_correct_error_line_new_line_after_number() {
@@ -1414,5 +1407,5 @@ mod lexer_tests {
             ",
             JSONError::new("Unexpected <tab>".to_string(), 2),
         )
-    }       
+    }
 }

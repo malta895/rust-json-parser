@@ -34,10 +34,7 @@ mod check_valid_tests {
     #[test]
     fn should_report_error_for_closed_brace_outside_obj() {
         let found_err = check_valid("}".as_bytes()).unwrap_err();
-        assert_eq!(
-            "Unexpected '}': at line 1",
-            found_err.to_string()
-        )
+        assert_eq!("Unexpected '}': at line 1", found_err.to_string())
     }
 
     #[test]
@@ -112,11 +109,18 @@ mod check_valid_tests {
         assert_eq!(Ok(()), res)
     }
     #[test]
-    fn should_recognize_array_within_subobject(){
-    let res = check_valid("[
+    fn should_recognize_array_within_subobject() {
+        let res = check_valid(
+            "[
   {\"key\": [\"value\"]}
- ]".as_bytes());
-  assert_eq!(Ok(()), res)
+ ]"
+            .as_bytes(),
+        );
+        assert_eq!(Ok(()), res)
     }
-    // TODO: caso con array coome valore di oggetto
+    #[test]
+    fn should_recognize_empty_array_empty_object() {
+        let res = check_valid("{\"key\": [ ],\"object\":{ }}".as_bytes());
+        assert_eq!(Ok(()), res)
+    }
 }

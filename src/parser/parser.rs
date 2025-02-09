@@ -25,14 +25,12 @@ impl State {
 
     fn open_obj(&mut self) {
         self.state_kind = StateKind::OpenObj;
-        self.obj_arr_stack
-            .push(Stack::Object)
+        self.obj_arr_stack.push(Stack::Object)
     }
 
     fn open_arr(&mut self) {
         self.state_kind = StateKind::OpenArr;
-        self.obj_arr_stack
-            .push(Stack::Array)
+        self.obj_arr_stack.push(Stack::Array)
     }
 
     fn close_arr(&mut self) -> Result<(), JSONError> {
@@ -42,6 +40,13 @@ impl State {
             Some(_) | None => return Err(JSONError::new("Unexpected ']'".to_string(), 1)),
         };
         Ok(())
+    }
+
+    fn is_inside_object(&self) -> bool {
+        match self.obj_arr_stack.last() {
+            Some(Stack::Object) => true,
+            Some(_) | None => false,
+        }
     }
 }
 
@@ -62,7 +67,7 @@ enum StateKind {
     ObjVal,
     AfterObjVal,
     ObjComma,
-    
+
     ArrVal,
     ArrValAfterComma,
 
@@ -75,7 +80,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
         dbg!("processing:", token, &state);
         match (&state.state_kind, token) {
             (_, Token::NewLine) => {}
-            (StateKind::Initial, Token::Null) =>{
+            (StateKind::Initial, Token::Null) => {
                 state.state_kind = StateKind::End;
             }
             (StateKind::Initial, Token::OpenBrace) => {
@@ -109,6 +114,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::OpenArr, Token::OpenBrace) => {
                 state.open_obj();
             }
+            (StateKind::ArrValAfterComma, Token::StringLiteral(_)) if state.is_inside_object() => {
+                state.state_kind = StateKind::ObjKey;
+            }
+
             (
                 StateKind::OpenArr | StateKind::ArrValAfterComma,
                 Token::StringLiteral(_)
@@ -130,7 +139,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::ArrValAfterComma, Token::OpenBrace) => {
                 state.open_obj();
             }
-
+            (StateKind::ArrValAfterComma, Token::OpenBracket) => {
+                state.open_arr();
+            }
             (StateKind::ArrVal, Token::ClosedBrace) => {
                 state.close_obj()?;
             }
@@ -159,17 +170,15 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::AfterObjVal, Token::ClosedBracket) => {
                 state.close_arr()?;
             }
-            (StateKind::AfterObjVal, Token::Comma) => {
-                match state.obj_arr_stack.last() {
-                    Some(Stack::Array) => {
-                        state.state_kind = StateKind::ArrValAfterComma;
-                    }
-                    Some(Stack::Object) => {
-                        state.state_kind = StateKind::ObjComma;    
-                    }
-                    None => (),
+            (StateKind::AfterObjVal, Token::Comma) => match state.obj_arr_stack.last() {
+                Some(Stack::Array) => {
+                    state.state_kind = StateKind::ArrValAfterComma;
                 }
-            }
+                Some(Stack::Object) => {
+                    state.state_kind = StateKind::ObjComma;
+                }
+                None => (),
+            },
 
             (StateKind::ObjComma, Token::StringLiteral(_)) => {
                 state.state_kind = StateKind::ObjKey;
@@ -344,7 +353,7 @@ mod test_parser_pass {
             Token::Comma,//,
             Token::OpenBrace,//{
             Token::StringLiteral("some key".to_string()),//""
-            Token::Column,//: 
+            Token::Column,//:
             Token::OpenBracket,//[
             Token::StringLiteral("some string".to_string()),//""
             Token::ClosedBracket,//]
@@ -368,7 +377,26 @@ mod test_parser_pass {
             Token::ClosedBracket,
         ],
         lonely_null: vec![Token::Null],
-
+        array_after_arr_value: vec![
+            Token::OpenBracket,
+            Token::StringLiteral("some value".to_string()),
+            Token::Comma,
+            Token::OpenBracket,
+            Token::ClosedBracket,
+            Token::ClosedBracket,
+        ],
+        empty_array_followed_by_empty_obj: vec![
+            Token::OpenBrace,
+            Token::StringLiteral("key".to_string()),
+            Token::Column,
+            Token::OpenBracket,
+            Token::ClosedBracket,
+            Token::Comma,
+            Token::StringLiteral("object_key".to_string()),
+            Token::Column,
+            Token::StringLiteral("some value".to_string()),
+            Token::ClosedBrace,
+        ],
     }
 }
 
