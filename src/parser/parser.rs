@@ -113,6 +113,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::OpenArr, Token::OpenBracket) => {
                 state.open_arr();
             }
+            (StateKind::OpenArr, Token::OpenBrace) => {
+                state.open_obj();
+            }
             (
                 StateKind::OpenArr | StateKind::ArrValAfterComma,
                 Token::StringLiteral(_)
@@ -163,7 +166,15 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
                 state.close_arr()?;
             }
             (StateKind::AfterObjVal, Token::Comma) => {
-                state.state_kind = StateKind::ObjComma;
+                match state.obj_arr_stack.last() {
+                    Some(ObjArr::RootArr | ObjArr::Array) => {
+                        state.state_kind = StateKind::ArrValAfterComma;
+                    }
+                    Some(ObjArr::RootObj | ObjArr::Object) => {
+                        state.state_kind = StateKind::ObjComma;    
+                    }
+                    None => (),
+                }
             }
 
             (StateKind::ObjComma, Token::StringLiteral(_)) => {
@@ -171,7 +182,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (_, token) => {
-                dbg!("unexpected kind", state, token);
+                dbg!("unexpected kind", token, state);
                 return Err(JSONError::new(format!("Unexpected {}", token), 1));
             }
         }
@@ -331,6 +342,35 @@ mod test_parser_pass {
             Token::Comma,
             Token::OpenBrace,
             Token::ClosedBrace,
+            Token::ClosedBracket,
+        ],
+        array_with_object_with_element: vec![
+            Token::OpenBracket,//[
+            Token::StringLiteral("some string".to_string()),//""
+            Token::Comma,//,
+            Token::OpenBrace,//{
+            Token::StringLiteral("some key".to_string()),//""
+            Token::Column,//: 
+            Token::OpenBracket,//[
+            Token::StringLiteral("some string".to_string()),//""
+            Token::ClosedBracket,//]
+            Token::ClosedBrace, //}
+            Token::Comma,//,
+            Token::OpenBrace,//{
+            Token::ClosedBrace,//}
+            Token::ClosedBracket,
+        ],
+        object_as_first_array_element: vec![
+            Token::OpenBracket,
+            Token::NewLine,
+            Token::OpenBrace,
+            Token::StringLiteral("key".to_string()),
+            Token::Column,
+            Token::OpenBracket,
+            Token::StringLiteral("value".to_string()),
+            Token::ClosedBracket,
+            Token::ClosedBrace,
+            Token::NewLine,
             Token::ClosedBracket,
         ],
     }

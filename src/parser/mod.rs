@@ -111,4 +111,12 @@ mod check_valid_tests {
         let res = check_valid("{ \"key\": {\n\"inner_key\":\"inner_val\"\n}\n}".as_bytes());
         assert_eq!(Ok(()), res)
     }
+    #[test]
+    fn should_recognize_array_within_subobject(){
+    let res = check_valid("[
+  {\"key\": [\"value\"]}
+ ]".as_bytes());
+  assert_eq!(Ok(()), res)
+    }
+    // TODO: caso con array coome valore di oggetto
 }
