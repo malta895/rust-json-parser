@@ -77,7 +77,6 @@ enum StateKind {
 pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
     let mut state = State::new();
     for token in &tokens {
-        dbg!("processing:", token, &state);
         match (&state.state_kind, token) {
             (_, Token::NewLine) => {}
             (StateKind::Initial, Token::Null) => {
@@ -86,16 +85,8 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::Initial, Token::OpenBrace) => {
                 state.open_obj();
             }
-            (StateKind::Initial, Token::ClosedBrace) => {
-                return Err(JSONError::new("Unexpected '}'".to_string(), 1));
-            }
             (StateKind::Initial, Token::OpenBracket) => {
                 state.open_arr();
-            }
-
-            (StateKind::End, token) => {
-                dbg!("state end with token", token);
-                return Err(JSONError::new(format!("Unexpected {}", token), 1));
             }
 
             (StateKind::OpenObj, Token::StringLiteral(_)) => {
@@ -185,13 +176,11 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
 
             (_, token) => {
-                dbg!("unexpected kind", token, state);
                 return Err(JSONError::new(format!("Unexpected {}", token), 1));
             }
         }
     }
     if state.state_kind != StateKind::End {
-        dbg!(state.state_kind);
         return Err(JSONError::new(format!("Unexpected EOF"), 1));
     }
     Ok(())
