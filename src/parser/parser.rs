@@ -3,7 +3,7 @@ use super::{error::JSONError, token::Token};
 #[derive(Debug)]
 struct State {
     state_kind: StateKind,
-    obj_arr_stack: Vec<ObjArr>,
+    obj_arr_stack: Vec<Stack>,
 }
 
 impl State {
@@ -16,8 +16,8 @@ impl State {
 
     fn close_obj(&mut self) -> Result<(), JSONError> {
         self.state_kind = match self.obj_arr_stack.pop() {
-            Some(ObjArr::RootObj) => StateKind::End,
-            Some(ObjArr::Object) => StateKind::AfterObjVal,
+            Some(Stack::Object) if self.obj_arr_stack.len() == 0 => StateKind::End,
+            Some(Stack::Object) => StateKind::AfterObjVal,
             Some(_) | None => return Err(JSONError::new("Unexpected '}'".to_string(), 1)),
         };
         Ok(())
@@ -26,27 +26,19 @@ impl State {
     fn open_obj(&mut self) {
         self.state_kind = StateKind::OpenObj;
         self.obj_arr_stack
-            .push(if let Some(_) = self.obj_arr_stack.last() {
-                ObjArr::Object
-            } else {
-                ObjArr::RootObj
-            })
+            .push(Stack::Object)
     }
 
     fn open_arr(&mut self) {
         self.state_kind = StateKind::OpenArr;
         self.obj_arr_stack
-            .push(if let Some(_) = self.obj_arr_stack.last() {
-                ObjArr::Array
-            } else {
-                ObjArr::RootArr
-            })
+            .push(Stack::Array)
     }
 
     fn close_arr(&mut self) -> Result<(), JSONError> {
         self.state_kind = match self.obj_arr_stack.pop() {
-            Some(ObjArr::RootArr) => StateKind::End,
-            Some(ObjArr::Array) => StateKind::ArrVal,
+            Some(Stack::Array) if self.obj_arr_stack.len() == 0 => StateKind::End,
+            Some(Stack::Array) => StateKind::ArrVal,
             Some(_) | None => return Err(JSONError::new("Unexpected ']'".to_string(), 1)),
         };
         Ok(())
@@ -54,9 +46,7 @@ impl State {
 }
 
 #[derive(Debug, PartialEq)]
-enum ObjArr {
-    RootArr,
-    RootObj,
+enum Stack {
     Object,
     Array,
 }
@@ -85,6 +75,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
         dbg!("processing:", token, &state);
         match (&state.state_kind, token) {
             (_, Token::NewLine) => {}
+            (StateKind::Initial, Token::Null) =>{
+                state.state_kind = StateKind::End;
+            }
             (StateKind::Initial, Token::OpenBrace) => {
                 state.open_obj();
             }
@@ -137,6 +130,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             (StateKind::ArrValAfterComma, Token::OpenBrace) => {
                 state.open_obj();
             }
+
             (StateKind::ArrVal, Token::ClosedBrace) => {
                 state.close_obj()?;
             }
@@ -167,10 +161,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<(), JSONError> {
             }
             (StateKind::AfterObjVal, Token::Comma) => {
                 match state.obj_arr_stack.last() {
-                    Some(ObjArr::RootArr | ObjArr::Array) => {
+                    Some(Stack::Array) => {
                         state.state_kind = StateKind::ArrValAfterComma;
                     }
-                    Some(ObjArr::RootObj | ObjArr::Object) => {
+                    Some(Stack::Object) => {
                         state.state_kind = StateKind::ObjComma;    
                     }
                     None => (),
@@ -373,6 +367,8 @@ mod test_parser_pass {
             Token::NewLine,
             Token::ClosedBracket,
         ],
+        lonely_null: vec![Token::Null],
+
     }
 }
 
